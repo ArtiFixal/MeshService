@@ -42,8 +42,8 @@ public class APIGatewayAgent extends Agent{
         String action=reader.readString("action").toLowerCase();
         switch (action) {
             case "getserviceinfo" -> {
-                String serviceName=reader.readString("service");
-                Hostport toService=askManagerForServiceHostport(serviceName);
+                String serviceType=reader.readString("service");
+                Hostport toService=askManagerForServiceHostport(serviceType);
                 response.addField("host", toService.getHost());
                 response.addField("port", toService.getPort());
             }

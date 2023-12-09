@@ -32,18 +32,18 @@ public class ServiceAgent extends Agent{
                 int messageID=reader.readNumber("messageID",Integer.class);
                 response.addField("responseText",messageID);
                 String action=reader.readString("action").toLowerCase();
-                String serviceName=reader.readString("service");
+                String serviceType=reader.readString("service");
                 switch(action){
                     // Manager request to run given service
                     case "run" -> {
                         int port=reader.readNumberPositive("port",Integer.class);
-                        Service serv=getOrRun(serviceName,port);
-                        runningServices.put(serviceName,serv);
+                        Service serv=getOrRun(serviceType,port);
+                        runningServices.put(serviceType,serv);
                         response.addField("serviceID",serv.getServiceID());
                         response.addField("port",port);
                     }
                     case "closeservice" -> {
-                        Service serv=runningServices.get(serviceName);
+                        Service serv=runningServices.get(serviceType);
                         updateServiceStatusAtManager(serv.getServiceID(),ServiceStatus.CLOSING);
                         serv.closeService();
                         updateServiceStatusAtManager(serv.getServiceID(),ServiceStatus.CLOSED);
@@ -52,7 +52,7 @@ public class ServiceAgent extends Agent{
                         throw new RequestException("Nieprawidłowe zapytanie.");
                 }
                 // Setting response fields
-                response.addField("service",serviceName);
+                response.addField("service",serviceType);
                 response.addField("type","response");
                 response.setStatus(200);
             }

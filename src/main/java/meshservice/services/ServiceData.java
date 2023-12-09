@@ -8,27 +8,42 @@ import meshservice.ServiceStatus;
  * @author ArtiFixal
  */
 public class ServiceData {
-    public String serviceName;
+    /**
+     * What this service does.
+     */
+    public String serviceType;
+    
+    /**
+     * Current status of the service.
+     */
     private ServiceStatus status;
+    
+    /**
+     * Time since service was inactive.
+     */
     private long inactiveTimer;
+    
+    /**
+     * Port on which service listens.
+     */
     private final int port;
 
-    public ServiceData(String serviceName,int port) {
-        this.serviceName=serviceName;
+    public ServiceData(String serviceType,int port) {
+        this.serviceType=serviceType;
         status=ServiceStatus.STARTING;
         inactiveTimer=0;
         this.port=port;
     }
 
-    public ServiceData(String serviceName,int port,ServiceStatus status) {
-        this.serviceName=serviceName;
+    public ServiceData(String serviceType,int port,ServiceStatus status) {
+        this.serviceType=serviceType;
         this.status=status;
         inactiveTimer=0;
         this.port=port;
     }
 
-    public String getServiceName() {
-        return serviceName;
+    public String getServiceType() {
+        return serviceType;
     }
 
     public ServiceStatus getStatus() {

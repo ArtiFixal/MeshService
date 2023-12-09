@@ -64,7 +64,7 @@ public class ServiceManager extends Service{
                     if(service.getInactiveTimer()>=MAX_INACTIVITY)
                     {
                         final JsonBuilder closeRequest=new JsonBuilder("closeService")
-                                .addField("service",service.getServiceName())
+                                .addField("service",service.getServiceType())
                                 .addField("type","request");
                         try{
                             communicateWithServiceAgent(agentKey,closeRequest);
@@ -124,9 +124,9 @@ public class ServiceManager extends Service{
                         System.out.println("[Info]: New agent registered: "+agentName);
                     }
                     case "servicestatuschange" -> {
-                        String serviceName=reader.readString("service");
+                        String serviceType=reader.readString("service");
                         int newStatus=reader.readNumber("newStatus",Integer.class);
-                        runningAgents.get(agentName).setServiceStatus(serviceName,serviceUUID,
+                        runningAgents.get(agentName).setServiceStatus(serviceType,serviceUUID,
                                 ServiceStatus.interperFromNumber(newStatus));
                     }
                     case "renewtimer" -> {
@@ -212,19 +212,19 @@ public class ServiceManager extends Service{
      * Sends request to given service agent to start given service.
      * 
      * @param agentName Where to start.
-     * @param serviceName What to start.
+     * @param serviceType What to start.
      * 
      * @return Agent response.
      * 
      * @throws IOException If any socket error occures.
      * @throws RequestException If request was malformed.
      */
-    protected JsonReader sendServiceStartRequest(String agentName,String serviceName) throws IOException,RequestException
+    protected JsonReader sendServiceStartRequest(String agentName,String serviceType) throws IOException,RequestException
     {
         final JsonBuilder request=new JsonBuilder("run")
                 .addField("type","request")
                 .addField("port",assignPort())
-                .addField("service",serviceName);
+                .addField("service",serviceType);
         return communicateWithServiceAgent(agentName,request);
     }
 
