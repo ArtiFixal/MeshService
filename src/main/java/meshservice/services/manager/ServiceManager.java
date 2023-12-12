@@ -7,9 +7,12 @@ import java.util.HashMap;
 import java.util.Map;
 import meshservice.AgentServicesInfo;
 import meshservice.ServiceStatus;
+import meshservice.communication.Hostport;
 import meshservice.communication.JsonBuilder;
 import meshservice.communication.JsonReader;
 import meshservice.communication.RequestException;
+import meshservice.loadbalancer.LoadBalancer;
+import meshservice.loadbalancer.RoundRobinBalancer;
 import meshservice.services.Service;
 import meshservice.services.ServiceData;
 
@@ -20,7 +23,18 @@ import meshservice.services.ServiceData;
  */
 public class ServiceManager extends Service{
 
+    /**
+     * Stores running agents, where: <br>
+     * Key - agent name <br>
+     * Value - agent info
+     */
     private HashMap<String,AgentServicesInfo> runningAgents;
+    
+    /**
+     * Distributes traffic across service instances.
+     */
+    private LoadBalancer loadBalancer;
+    
     /**
      * Current processed client socket.
      */
@@ -38,6 +52,7 @@ public class ServiceManager extends Service{
     public ServiceManager(int port) throws IOException{
         super(port);
         runningAgents=new HashMap<>();
+        loadBalancer=new RoundRobinBalancer(runningAgents);
     }
 
     @Override
@@ -68,6 +83,7 @@ public class ServiceManager extends Service{
                                 .addField("type","request");
                         try{
                             communicateWithServiceAgent(agentKey,closeRequest);
+                            loadBalancer.removeServiceDestination(agentKey,serviceKey,service);
                         }catch(Exception e){
                             System.out.println(e);
                             e.printStackTrace();
@@ -99,6 +115,7 @@ public class ServiceManager extends Service{
     {
         ServiceData newService=new ServiceData(serviceType,servicePort);
         runningAgents.get(agentName).getRunningServices().get(serviceType).put(serviceUUID,newService);
+        loadBalancer.addNewServiceDestination(agentName,serviceType,newService);
         System.out.println("[Info]: New service registered: "+serviceType+" in agent:"+agentName);
     }
 
@@ -111,32 +128,36 @@ public class ServiceManager extends Service{
         String type=reader.readString("type").toLowerCase();
         String action=reader.readString("action").toLowerCase();
         String agentName=reader.readString("agent");
-        String serviceUUID=reader.readString("serviceID");
         switch(type){
             case "request" -> {
                 switch(action){
                     case "registeragent" -> {
+                        String serviceUUID=reader.readString("serviceID");
                         AgentServicesInfo agent=new AgentServicesInfo(serviceUUID,
                                 currentClient.getInetAddress().getHostName(),
                                 currentClient.getPort(),
                                 reader.readArrayOf("availableServices"));
                         runningAgents.put(agentName,agent);
+                        loadBalancer.addNewAgentDestination(agentName,agent);
                         System.out.println("[Info]: New agent registered: "+agentName);
                     }
                     case "servicestatuschange" -> {
+                        String serviceUUID=reader.readString("serviceID");
                         String serviceType=reader.readString("service");
                         int newStatus=reader.readNumber("newStatus",Integer.class);
                         runningAgents.get(agentName).setServiceStatus(serviceType,serviceUUID,
                                 ServiceStatus.interperFromNumber(newStatus));
                     }
                     case "renewtimer" -> {
-                        String service=reader.readString("service");
+                        String serviceUUID=reader.readString("serviceID");
+                        String serviceType=reader.readString("service");
                         runningAgents.get(agentName).getRunningServices()
-                                .get(service).get(serviceUUID).setInactiveTimer(0);
+                                .get(serviceType).get(serviceUUID).setInactiveTimer(0);
                         start=System.currentTimeMillis();
                     }
                     case "askforservice" -> {
-                        processServiceAsk(serviceUUID,reader,response);
+                        String serviceType=reader.readString("service");
+                        processServiceAsk(serviceType,response);
                     }
                     default ->
                         throw new RequestException("Unknown request action");
@@ -149,27 +170,6 @@ public class ServiceManager extends Service{
         response.setStatus(200);
         long passed=start-System.currentTimeMillis();
         processInactivityTimers(passed);
-    }
-
-    /**
-     * Searches for given service in runinning agents.
-     * 
-     * @param serviceAction What service does.
-     * @param serviceUUID For what to search.
-     * 
-     * @return Found service.
-     * 
-     * @throws ServiceNotFoundException If service was not found.
-     */
-    protected SearchedService findServiceData(String serviceAction,String serviceUUID) throws ServiceNotFoundException
-    {
-        for(String agentName:runningAgents.keySet())
-        {
-            ServiceData data=runningAgents.get(agentName).getRunningServices().get(serviceAction).get(serviceUUID);
-            if(data!=null)
-                return new SearchedService(agentName,data);
-        }
-        throw new ServiceNotFoundException(serviceUUID);
     }
 
     /**
@@ -231,35 +231,31 @@ public class ServiceManager extends Service{
     /**
      * Processes API Gateway agent request for service hostport.
      * 
-     * @param serviceUUID What to send.
-     * @param reader Request from agent.
+     * @param serviceType What type service to send.
      * @param response Response to agent.
      * 
      * @throws RequestException If request was malformed.
      * @throws IOException If any socket error occurred.
      */
-    private void processServiceAsk(String serviceUUID,JsonReader reader,JsonBuilder response) throws RequestException,IOException
+    private void processServiceAsk(String serviceType,JsonBuilder response) throws RequestException,IOException
     {
-        String serviceAction=reader.readString("service"),
-                host;
-        int port;
+        Hostport askedFor;
         try{
-            SearchedService askedFor=findServiceData(serviceAction,serviceUUID);
-            host=askedFor.getAgentHost();
-            port=askedFor.getData().getPort();
+            askedFor=loadBalancer.balance(serviceType);
         }catch(ServiceNotFoundException e){
             try{
-                String agentKey=findAgentResponsibleForService(serviceAction);
-                JsonReader agentResponse=sendServiceStartRequest(agentKey,serviceAction);
-                port=agentResponse.readNumber("port",Integer.class);
-                host=runningAgents.get(agentKey).getHost();
-                registerService(agentKey,serviceUUID,serviceAction,port);
+                String agentKey=findAgentResponsibleForService(serviceType);
+                JsonReader agentResponse=sendServiceStartRequest(agentKey,serviceType);
+                askedFor=new Hostport(runningAgents.get(agentKey).getHost(),
+                        agentResponse.readNumber("port",Integer.class));
+                String serviceUUID=agentResponse.readString("serviceID");
+                registerService(agentKey,serviceUUID,serviceType,askedFor.getPort());
             }catch(ServiceNotFoundException ex){
                 throw new RequestException("Service not found");
             }
         }
-        response.addField("host",host)
-                .addField("port",port);
+        response.addField("host",askedFor.getHost())
+                .addField("port",askedFor.getPort());
     }
 
     protected class SearchedService{
