@@ -54,6 +54,7 @@ public class GetPostsService extends Service {
         long ownerID = reader.readNumber("ownerID", Long.class);
         try {
             if (action.equals("getPosts")) {
+                // TODO: change the way of serializing lists into JSON
                 response.addArray("posts", dao.getRecentPosts(ownerID))
                         .setStatus(200);
             } else {
