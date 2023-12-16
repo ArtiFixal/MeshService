@@ -3,12 +3,13 @@ package meshservice.loadbalancer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import meshservice.AgentServicesInfo;
+import meshservice.communication.AgentHostport;
 import meshservice.communication.Hostport;
 import meshservice.services.ServiceData;
 import meshservice.services.manager.ServiceNotFoundException;
 
 /**
- * Load ballancer which distributes traffic evenly and cyclically.
+ * Load balancer which distributes traffic evenly and cyclically.
  * 
  * @author ArtiFixal
  */
@@ -36,9 +37,42 @@ public class RoundRobinBalancer implements LoadBalancer{
     }
 
     @Override
-    public Hostport balance(String serviceType) throws ServiceNotFoundException{
-        return balanceInfo.get(agentIterator.getNextAgent())
+    public Hostport balanceService(String serviceType) throws ServiceNotFoundException{
+        return balanceInfo.get(lookForAgentAbleToRun(serviceType))
                 .getNextService(serviceType);
+    }
+    
+    /**
+     * Searches for agent able to run given service type.
+     * 
+     * @param serviceType What to test for.
+     * 
+     * @return Agent name.
+     * 
+     * @throws ServiceNotFoundException If there is no agent able to run given 
+     * service.
+     */
+    protected String lookForAgentAbleToRun(String serviceType) throws ServiceNotFoundException
+    {
+        int retries=agentIterator.getAgentNames().size();
+        while(retries!=0)
+        {
+            String agentName=agentIterator.getNextAgent();
+            if(balanceInfo.get(agentName).getAgentInfo().getAvailableServices()
+                .contains(serviceType))
+                return agentName;
+            retries--;
+        }
+        throw new ServiceNotFoundException("There is no agent able to run given service: "+serviceType);
+    }
+    
+    @Override
+    public AgentHostport balanceAgent(String serviceType) throws ServiceNotFoundException
+    {
+        final String agentName=lookForAgentAbleToRun(serviceType);
+        final AgentServicesInfo agentInfo=balanceInfo
+            .get(agentName).getAgentInfo();
+        return new AgentHostport(agentName,agentInfo.getHost(),agentInfo.getPort());
     }
     
     @Override
@@ -107,13 +141,24 @@ public class RoundRobinBalancer implements LoadBalancer{
         public HashMap<String,BalancerInfoIterator> getServices(){
             return services;
         }
+        
+        public AgentServicesInfo getAgentInfo(){
+            return agentInfo;
+        }
     }
     
     /**
      * Iterator over agent services.
      */
     private class BalancerInfoIterator{
+        /**
+         * Stores info about agent service type.
+         */
         private final ArrayList<ServiceData> data;
+        
+        /**
+         * Last used service index.
+         */
         private int lastPosition;
 
         public BalancerInfoIterator(ArrayList<ServiceData> data){
@@ -144,31 +189,42 @@ public class RoundRobinBalancer implements LoadBalancer{
     }
 
     private class AgentIterator{
-        private final ArrayList<String> data;
+        /**
+         * Stores available agent names.
+         */
+        private final ArrayList<String> agentNames;
+        
+        /**
+         * Last used agent index.
+         */
         private int lastPosition;
 
-        public AgentIterator(ArrayList<String> data){
-            this.data=data;
+        public AgentIterator(ArrayList<String> agentNames){
+            this.agentNames=agentNames;
             lastPosition=0;
         }
         
         public void addNewAgent(String agentName){
-            data.add(agentName);
+            agentNames.add(agentName);
         }
         
         public String getNextAgent() throws ServiceNotFoundException
         {
-            if(data.isEmpty())
+            if(agentNames.isEmpty())
                 throw new ServiceNotFoundException("There is no agents");
-            if(lastPosition<data.size())
+            if(lastPosition<agentNames.size())
                 lastPosition=0;
-            String curr=data.get(lastPosition);
+            String curr=agentNames.get(lastPosition);
             lastPosition++;
             return curr;
         }
         
+        protected ArrayList<String> getAgentNames(){
+            return agentNames;
+        }
+        
         public void removeAgent(String agentName){
-            data.remove(agentName);
+            agentNames.remove(agentName);
         }
     }
 }

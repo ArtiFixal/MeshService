@@ -1,6 +1,7 @@
 package meshservice.loadbalancer;
 
 import meshservice.AgentServicesInfo;
+import meshservice.communication.AgentHostport;
 import meshservice.communication.Hostport;
 import meshservice.services.ServiceData;
 import meshservice.services.manager.ServiceNotFoundException;
@@ -13,7 +14,7 @@ import meshservice.services.manager.ServiceNotFoundException;
 public interface LoadBalancer {
     
     /**
-     * Selects best traffic destination.
+     * Selects best service destination.
      * 
      * @param serviceType Which service type to select.
      * 
@@ -22,7 +23,18 @@ public interface LoadBalancer {
      * @throws ServiceNotFoundException If there is no running service of given 
      * type.
      */
-    public Hostport balance(String serviceType) throws ServiceNotFoundException;
+    public Hostport balanceService(String serviceType) throws ServiceNotFoundException;
+    
+    /**
+     * Selects best agent destination able to run given service type.
+     * 
+     * @param serviceType What to look for in agent available services.
+     * 
+     * @return Agent address.
+     * 
+     * @throws ServiceNotFoundException If there is no agents.
+     */
+    public AgentHostport balanceAgent(String serviceType) throws ServiceNotFoundException;
     
     /**
      * Adds new agent to the balancer pool.
