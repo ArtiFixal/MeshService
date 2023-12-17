@@ -3,6 +3,7 @@ package meshservice.agents;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.UUID;
 import meshservice.ServiceStatus;
@@ -65,8 +66,9 @@ public abstract class Agent extends MultithreadService{
      * 
      * @throws IOException If any socket error occurres.
      * @throws RequestException If request was malformed.
+     * @throws SQLException If SQL error occurred.
      */
-    protected abstract Service runService(String serviceType,int port) throws IOException,RequestException;
+    protected abstract Service runService(String serviceType,int port) throws IOException,RequestException,SQLException;
     
     /**
      * Gets running service of a given type or creates a new one if there 
@@ -79,8 +81,9 @@ public abstract class Agent extends MultithreadService{
      * 
      * @throws IOException If any socket error occurres.
      * @throws RequestException If request was malformed.
+     * @throws SQLException If SQL error occurred.
      */
-    protected Service getOrRun(String serviceType,int port) throws IOException,RequestException
+    protected Service getOrRun(String serviceType,int port) throws IOException,RequestException,SQLException
     {
         Service serv=runningServices.get(serviceType);
         if(serv!=null){

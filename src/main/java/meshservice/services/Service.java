@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.sql.SQLException;
 import java.util.UUID;
 import meshservice.communication.RequestException;
 import meshservice.communication.JsonBuilder;
@@ -51,10 +52,11 @@ public abstract class Service extends Thread{
      *
      * @throws IOException If any I/O error occurs.
      * @throws RequestException If client request is invalid.
+     * @throws SQLException If SQL error occurs.
      */
     public abstract void processRequest(BufferedInputStream request,JsonBuilder response)
-            throws IOException,RequestException;
-
+            throws IOException,RequestException,SQLException;
+    
     /**
      * Sets up client socket.
      *

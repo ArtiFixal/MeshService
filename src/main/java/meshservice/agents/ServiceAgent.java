@@ -2,11 +2,17 @@ package meshservice.agents;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.sql.SQLException;
 import meshservice.ServiceStatus;
 import meshservice.communication.JsonBuilder;
 import meshservice.communication.JsonReader;
 import meshservice.communication.RequestException;
+import meshservice.services.AddPostService;
+import meshservice.services.FileService;
+import meshservice.services.GetPostsService;
 import meshservice.services.Service;
+import meshservice.services.UserAuthenticationService;
+import meshservice.services.UserRegisterService;
 
 /**
  * Agent responsible for services.
@@ -21,7 +27,7 @@ public class ServiceAgent extends Agent{
     }
 
     @Override
-    public void processRequest(BufferedInputStream request,JsonBuilder response) throws IOException,RequestException{
+    public void processRequest(BufferedInputStream request,JsonBuilder response) throws IOException,RequestException,SQLException{
         final JsonReader reader=new JsonReader(request);
         System.out.println("Received: "+reader.getRequestNode().toPrettyString());
         String type=reader.readString("type").toLowerCase();
@@ -47,7 +53,7 @@ public class ServiceAgent extends Agent{
                         updateServiceStatusAtManager(serv.getServiceID(),ServiceStatus.CLOSED);
                     }
                     default ->
-                        throw new RequestException("Nieprawidłowe zapytanie.");
+                        throw new RequestException("Unknown request action.");
                 }
                 // Setting response fields
                 response.addField("service",serviceType);
@@ -57,25 +63,36 @@ public class ServiceAgent extends Agent{
             case "response" -> 
                 System.out.println("Received: "+reader.getRequestNode().toPrettyString());
             default -> 
-                throw new RequestException("Nieprawidłowe zapytanie.");
+                throw new RequestException("Unknown request type.");
         }
     }
 
     @Override
-    protected Service runService(String serviceName,int port) throws IOException,RequestException{
+    protected Service runService(String serviceName,int port) throws IOException,RequestException,SQLException{
         return switch(serviceName){
+            case "login" ->
+                new UserAuthenticationService(port);
+            case "register" ->
+                new UserRegisterService(port);
+            case "addpost" ->
+                new AddPostService(port);
+            case "getposts" ->
+                new GetPostsService(port);
+            case "uploadfile" ->
+                new FileService(port);
+            case "getfile" ->
+                new FileService(port);
             default ->
-                throw new RequestException("Nieprawidłowe zapytanie.");
+                throw new RequestException("Unknown service name: "+serviceName);
         };
     }
 
     @Override
     public String[] getAvailableServices(){
-        final String[] services=new String[]{"ms1","ms2"};
+        final String[] services=new String[]{"login","register","addpost",
+            "getposts","uploadfile","getfile"};
         return services;
     }
-    
-    
 
     public static void main(String[] args){
         try{
