@@ -6,8 +6,6 @@ import meshservice.ServiceStatus;
 import meshservice.communication.JsonBuilder;
 import meshservice.communication.JsonReader;
 import meshservice.communication.RequestException;
-import meshservice.services.MicroService1;
-import meshservice.services.MicroService2;
 import meshservice.services.Service;
 
 /**
@@ -66,10 +64,6 @@ public class ServiceAgent extends Agent{
     @Override
     protected Service runService(String serviceName,int port) throws IOException,RequestException{
         return switch(serviceName){
-            case "MS1" ->
-                new MicroService1(port);
-            case "MS2" ->
-                new MicroService2(port);
             default ->
                 throw new RequestException("Nieprawidłowe zapytanie.");
         };
