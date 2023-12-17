@@ -11,6 +11,7 @@ import meshservice.communication.Hostport;
 import meshservice.communication.JsonBuilder;
 import meshservice.communication.JsonReader;
 import meshservice.communication.RequestException;
+import meshservice.communication.ServiceHostport;
 import meshservice.loadbalancer.LoadBalancer;
 import meshservice.loadbalancer.RoundRobinBalancer;
 import meshservice.services.Service;
@@ -24,6 +25,7 @@ import meshservice.services.ServiceTraffic;
  * @author ArtiFixal
  */
 public class ServiceManager extends Service{
+    public static final String[] REQUEST_REQUIRED_FIELDS=new String[]{"action","agentName"};
 
     /**
      * Max service inactivity time in miliseconds.
@@ -120,6 +122,11 @@ public class ServiceManager extends Service{
      */
     protected int assignPort(){
         return 0;
+    }
+
+    @Override
+    public String[] getRequiredRequestFields(){
+        return REQUEST_REQUIRED_FIELDS;
     }
 
     @Override
@@ -277,16 +284,20 @@ public class ServiceManager extends Service{
                 serviceTypeTraffic.put(serviceType,new ServiceTraffic(SERVICE_INVOKE_RATIO,invokeCallback));
             }
         }
-        Hostport askedFor;
+        ServiceHostport askedFor;
         try{
             askedFor=loadBalancer.balanceService(serviceType);
         }catch(ServiceNotFoundException e){
             JsonReader agentResponse=requestServiceStart(serviceType);
-            askedFor=new Hostport(agentResponse.readString("host"),
+            String[] requiredFields=agentResponse.readArrayOf("requiredFields")
+                .toArray(String[]::new);
+            askedFor=new ServiceHostport(requiredFields,
+                agentResponse.readString("host"),
                 agentResponse.readNumber("port",Integer.class));
         }
         response.addField("host",askedFor.getHost())
-                .addField("port",askedFor.getPort());
+                .addField("port",askedFor.getPort())
+                .addArray("requiredFields",askedFor.getRequestRequiredFields());
     }
 
     @Override

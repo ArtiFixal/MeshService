@@ -17,12 +17,18 @@ import meshservice.communication.JsonBuilder;
  * @author ApolLuck
  */
 public class UserAuthenticationService extends Service{
-
+    public static final String[] REQUEST_REQUIRED_FIELDS=new String[]{"action","login","password"};
+    
     protected UserDAO dao;
 
     public UserAuthenticationService(int port) throws IOException,SQLException{
         super(port);
         dao=new UserDAO();
+    }
+
+    @Override
+    public String[] getRequiredRequestFields(){
+        return REQUEST_REQUIRED_FIELDS;
     }
 
     @Override

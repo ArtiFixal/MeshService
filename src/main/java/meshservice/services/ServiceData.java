@@ -14,6 +14,11 @@ public class ServiceData {
     public String serviceType;
     
     /**
+     * Fields which request must contain.
+     */
+    public String[] serviceRequestRequiredFields;
+    
+    /**
      * Current status of the service.
      */
     private ServiceStatus status;
@@ -56,6 +61,10 @@ public class ServiceData {
 
     public long getInactiveTimer() {
         return inactiveTimer;
+    }
+
+    public String[] getServiceRequestRequiredFields(){
+        return serviceRequestRequiredFields;
     }
     
     public void setStatus(ServiceStatus status) {

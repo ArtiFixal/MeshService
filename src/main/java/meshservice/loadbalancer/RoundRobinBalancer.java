@@ -5,6 +5,7 @@ import java.util.HashMap;
 import meshservice.AgentServicesInfo;
 import meshservice.communication.AgentHostport;
 import meshservice.communication.Hostport;
+import meshservice.communication.ServiceHostport;
 import meshservice.services.ServiceData;
 import meshservice.services.manager.ServiceNotFoundException;
 
@@ -37,7 +38,7 @@ public class RoundRobinBalancer implements LoadBalancer{
     }
 
     @Override
-    public Hostport balanceService(String serviceType) throws ServiceNotFoundException{
+    public ServiceHostport balanceService(String serviceType) throws ServiceNotFoundException{
         return balanceInfo.get(lookForAgentAbleToRun(serviceType))
                 .getNextService(serviceType);
     }
@@ -133,9 +134,10 @@ public class RoundRobinBalancer implements LoadBalancer{
             });
         }
         
-        public Hostport getNextService(String serviceType) throws ServiceNotFoundException{
-            int port=services.get(serviceType).getNextService().getPort();
-            return new Hostport(agentInfo.getHost(),port);
+        public ServiceHostport getNextService(String serviceType) throws ServiceNotFoundException{
+            ServiceData data=services.get(serviceType).getNextService();
+            return new ServiceHostport(data.getServiceRequestRequiredFields(),
+                agentInfo.getHost(),data.getPort());
         }
         
         public HashMap<String,BalancerInfoIterator> getServices(){

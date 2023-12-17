@@ -16,12 +16,18 @@ import java.sql.SQLException;
  * @author ApolLuck
  */
 public class UserRegisterService extends Service{
-
+    public static final String[] REQUEST_REQUIRED_FIELDS=new String[]{"action","login","password"};
+    
     protected UserDAO dao;
 
     public UserRegisterService(int port) throws IOException,SQLException{
         super(port);
         dao=new UserDAO();
+    }
+
+    @Override
+    public String[] getRequiredRequestFields(){
+        return REQUEST_REQUIRED_FIELDS;
     }
 
     @Override

@@ -16,7 +16,8 @@ import java.sql.SQLException;
  * @author RGeresz
  */
 public class AddPostService extends Service {
-
+    public static final String[] REQUEST_REQUIRED_FIELDS=new String[]{"action","ownerID","content"};
+    
     private PostDAO dao;
 
     /**
@@ -37,6 +38,11 @@ public class AddPostService extends Service {
     public AddPostService(int port) throws IOException, SQLException {
         super(port);
         dao = new PostDAO();
+    }
+
+    @Override
+    public String[] getRequiredRequestFields(){
+        return REQUEST_REQUIRED_FIELDS;
     }
 
     /**

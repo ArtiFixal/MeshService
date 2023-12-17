@@ -21,9 +21,15 @@ import meshservice.services.UserRegisterService;
  * @author ApolLuck
  */
 public class ServiceAgent extends Agent{
-
+    public static final String[] REQUEST_REQUIRED_FIELDS=new String[]{"action"};
+    
     public ServiceAgent(String name,int port,String managerHost,int managerPort) throws IOException{
         super(name,port,managerHost,managerPort);
+    }
+
+    @Override
+    public String[] getRequiredRequestFields(){
+        return REQUEST_REQUIRED_FIELDS;
     }
 
     @Override
@@ -89,11 +95,10 @@ public class ServiceAgent extends Agent{
 
     @Override
     public String[] getAvailableServices(){
-        final String[] services=new String[]{"login","register","addpost",
-            "getposts","uploadfile","getfile"};
+        final String[] services=new String[]{"ms1","ms2"};
         return services;
     }
-
+    
     public static void main(String[] args){
         try{
             ServiceAgent agent=new ServiceAgent("Agent1",8000,"localhost",9000);

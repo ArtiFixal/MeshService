@@ -2,10 +2,10 @@ package meshservice.agents;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
-import meshservice.communication.Hostport;
 import meshservice.communication.JsonBuilder;
 import meshservice.communication.JsonReader;
 import meshservice.communication.RequestException;
+import meshservice.communication.ServiceHostport;
 import meshservice.config.AgentConfig;
 import meshservice.config.ConfigException;
 import meshservice.services.APIGateway;
@@ -17,6 +17,7 @@ import meshservice.services.Service;
  * @author ArtiFixal
  */
 public class APIGatewayAgent extends Agent{
+    public static final String[] REQUEST_REQUIRED_FIELDS=new String[]{"action"};
     
     public APIGatewayAgent(AgentConfig config) throws IOException, ConfigException {
         super(config);
@@ -28,6 +29,11 @@ public class APIGatewayAgent extends Agent{
         return new APIGateway(port);
     }
 
+    @Override
+    public String[] getRequiredRequestFields(){
+        return REQUEST_REQUIRED_FIELDS;
+    }
+    
     @Override
     public String[] getAvailableServices(){
         final String[] services=new String[]{"apigateway"};
@@ -43,9 +49,10 @@ public class APIGatewayAgent extends Agent{
         switch (action) {
             case "getserviceinfo" -> {
                 String serviceType=reader.readString("service");
-                Hostport toService=askManagerForServiceHostport(serviceType);
-                response.addField("host", toService.getHost());
-                response.addField("port", toService.getPort());
+                ServiceHostport managerResponse=askManagerForServiceHostport(serviceType);
+                response.addField("host", managerResponse.getHost())
+                    .addField("port", managerResponse.getPort())
+                    .addArray("requiredFields",managerResponse.getRequestRequiredFields());
             }
             default -> throw new RequestException("Unknown request action!");
         }
@@ -62,15 +69,17 @@ public class APIGatewayAgent extends Agent{
      * @throws IOException If any socket error occurres.
      * @throws RequestException If request was malformed.
      */
-    protected Hostport askManagerForServiceHostport(String ServiceName)
+    protected ServiceHostport askManagerForServiceHostport(String ServiceName)
             throws IOException,RequestException
     {
         final JsonBuilder request=new JsonBuilder("askForService")
                 .addField("agent", config.getAgentName())
                 .addField("service", ServiceName);
         JsonReader response=communicateWithManager(request);
-        return new Hostport(response.readString("host"),
-                response.readNumberPositive("port",Integer.class));
+        return new ServiceHostport(response.readArrayOf("requiredFields")
+                .toArray(String[]::new),
+            response.readString("host"),
+            response.readNumberPositive("port",Integer.class));
     }
 
 }

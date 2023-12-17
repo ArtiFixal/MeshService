@@ -18,6 +18,8 @@ import java.util.Base64;
  * @author RGeresz
  */
 public class FileService extends Service {
+    public static final String[] REQUEST_REQUIRED_FIELDS=new String[]{"action","ownerID","filename"};
+    
     /**
      * Default constructor that initializes the FileService with a default port.
      * @throws IOException if an I/O error occurs when opening the socket.
@@ -33,6 +35,11 @@ public class FileService extends Service {
      */
     public FileService(int port) throws IOException {
         super(port);
+    }
+
+    @Override
+    public String[] getRequiredRequestFields(){
+        return REQUEST_REQUIRED_FIELDS;
     }
 
     /**

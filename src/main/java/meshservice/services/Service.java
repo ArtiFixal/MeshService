@@ -56,6 +56,11 @@ public abstract class Service extends Thread{
      */
     public abstract void processRequest(BufferedInputStream request,JsonBuilder response)
             throws IOException,RequestException,SQLException;
+
+    /**
+     * @return Fields which must be included in a valid request.
+     */
+    public abstract String[] getRequiredRequestFields();
     
     /**
      * Sets up client socket.

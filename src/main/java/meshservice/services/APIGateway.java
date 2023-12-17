@@ -15,6 +15,8 @@ import meshservice.communication.RequestException;
  * @author ArtiFixal
  */
 public class APIGateway extends MultithreadService{
+    public static final String[] REQUEST_REQUIRED_FIELDS=new String[]{"action"};
+    
     /**
      * Socket with established connection to it's Agent.
      */
@@ -78,6 +80,11 @@ public class APIGateway extends MultithreadService{
     }
 
     @Override
+    public String[] getRequiredRequestFields(){
+        return REQUEST_REQUIRED_FIELDS;
+    }
+
+    @Override
     public void processRequest(BufferedInputStream request, JsonBuilder response)
             throws IOException, RequestException
     {
@@ -95,6 +102,11 @@ public class APIGateway extends MultithreadService{
         String serviceHost=agentResponse.readString("host");
         int servicePort=agentResponse.readNumber("port", Integer.class);
         final JsonBuilder serviceRequest=new JsonBuilder();
+        // Forward request required fields
+        for(String field:agentResponse.readArrayOf("requiredFields"))
+        {
+            serviceRequest.addField(field,reader.readString(field));
+        }
         JsonReader serviceResponse=communicateWithHost(serviceHost, servicePort, serviceRequest);
         String responseText=serviceResponse.readString("responseText");
         response.setStatus(responseText,200);
