@@ -98,7 +98,8 @@ public class ServiceAgent extends Agent{
 
     @Override
     public String[] getAvailableServices(){
-        final String[] services=new String[]{"ms1","ms2"};
+        final String[] services=new String[]{"login","register","addpost",
+            "getposts","uploadfile","getfile"};
         return services;
     }
     
