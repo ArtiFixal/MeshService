@@ -25,7 +25,7 @@ public class APIGatewayAgent extends Agent{
     }
 
     @Override
-    protected Service runService(String serviceName,int port) throws IOException, RequestException {
+    protected Service startService(String serviceName,int port) throws IOException, RequestException {
         return new APIGateway(port);
     }
 

@@ -47,7 +47,7 @@ public class ServiceAgent extends Agent{
                     // Manager request to run given service
                     case "run" -> {
                         int port=reader.readNumberPositive("port",Integer.class);
-                        Service serv=getOrRun(serviceType,port);
+                        Service serv=runService(serviceType,port);
                         runningServices.put(serviceType,serv);
                         response.addField("serviceID",serv.getServiceID());
                         response.addField("port",port);
@@ -74,7 +74,7 @@ public class ServiceAgent extends Agent{
     }
 
     @Override
-    protected Service runService(String serviceName,int port) throws IOException,RequestException,SQLException{
+    protected Service startService(String serviceName,int port) throws IOException,RequestException,SQLException{
         return switch(serviceName){
             case "login" ->
                 new UserAuthenticationService(port);

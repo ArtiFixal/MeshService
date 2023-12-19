@@ -56,11 +56,11 @@ public abstract class Agent extends MultithreadService{
     public abstract String[] getAvailableServices();
 
     /**
-     * Runs given service type on a given port. If port is 0 OS will choose 
-     * available port.
+     * Creates new service instance of a given type on a given port. If port 
+     * equals 0 OS will choose available port.
      * 
-     * @param serviceType Service type to run.
-     * @param port On which port to run new service.
+     * @param serviceType Service type to start.
+     * @param port On which port to start new service.
      * 
      * @return Started service.
      * 
@@ -68,28 +68,24 @@ public abstract class Agent extends MultithreadService{
      * @throws RequestException If request was malformed.
      * @throws SQLException If SQL error occurred.
      */
-    protected abstract Service runService(String serviceType,int port) throws IOException,RequestException,SQLException;
+    protected abstract Service startService(String serviceType,int port) throws IOException,RequestException,SQLException;
     
     /**
-     * Gets running service of a given type or creates a new one if there 
-     * is't any.
+     * Runs new service instance of a given type on a given port.
      * 
-     * @param serviceType Service type to retrieve.
-     * @param port Port on which to start new service.
+     * @param serviceType Service type to run.
+     * @param port Port on which to run new service.
      * 
-     * @return Retrieved service.
+     * @return Running service.
      * 
      * @throws IOException If any socket error occurres.
      * @throws RequestException If request was malformed.
      * @throws SQLException If SQL error occurred.
      */
-    protected Service getOrRun(String serviceType,int port) throws IOException,RequestException,SQLException
+    protected Service runService(String serviceType,int port) throws IOException,RequestException,SQLException
     {
-        Service serv=runningServices.get(serviceType);
-        if(serv!=null){
-            return serv;
-        }
-        serv=runService(serviceType,port);
+        Service serv=startService(serviceType,port);
+        runningServices.put(serv.getServiceID().toString(),serv);
         updateServiceStatusAtManager(serv.getServiceID(),ServiceStatus.RUNNING);
         return serv;
     }
