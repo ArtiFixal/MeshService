@@ -3,6 +3,7 @@ package meshservice.agents;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.sql.SQLException;
+import java.util.UUID;
 import meshservice.ServiceStatus;
 import meshservice.communication.JsonBuilder;
 import meshservice.communication.JsonReader;
@@ -48,15 +49,17 @@ public class ServiceAgent extends Agent{
                     case "run" -> {
                         int port=reader.readNumberPositive("port",Integer.class);
                         Service serv=runService(serviceType,port);
-                        runningServices.put(serviceType,serv);
+                        runningServices.put(serv.getServiceID(),serv);
                         response.addField("serviceID",serv.getServiceID());
                         response.addField("port",port);
                     }
                     case "closeservice" -> {
-                        Service serv=runningServices.get(serviceType);
-                        updateServiceStatusAtManager(serv.getServiceID(),ServiceStatus.CLOSING);
+                        UUID serviceUUID=UUID.fromString(reader.readString("serviceID"));
+                        Service serv=runningServices.get(serviceUUID);
+                        updateServiceStatusAtManager(serviceUUID,ServiceStatus.CLOSING);
                         serv.closeService();
-                        updateServiceStatusAtManager(serv.getServiceID(),ServiceStatus.CLOSED);
+                        updateServiceStatusAtManager(serviceUUID,ServiceStatus.CLOSED);
+                        runningServices.remove(serviceUUID);
                     }
                     default ->
                         throw new RequestException("Unknown request action.");

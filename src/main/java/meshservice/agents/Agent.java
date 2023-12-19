@@ -31,7 +31,7 @@ public abstract class Agent extends MultithreadService{
     /**
      * Services running on this agent.
      */
-    protected HashMap<String,Service> runningServices;
+    protected HashMap<UUID,Service> runningServices;
 
     public Agent(AgentConfig config) throws IOException,ConfigException{
         super(config.getAgentPort());
@@ -85,7 +85,7 @@ public abstract class Agent extends MultithreadService{
     protected Service runService(String serviceType,int port) throws IOException,RequestException,SQLException
     {
         Service serv=startService(serviceType,port);
-        runningServices.put(serv.getServiceID().toString(),serv);
+        runningServices.put(serv.getServiceID(),serv);
         updateServiceStatusAtManager(serv.getServiceID(),ServiceStatus.RUNNING);
         return serv;
     }

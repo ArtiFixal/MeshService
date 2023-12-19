@@ -2,6 +2,7 @@ package meshservice.agents;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.util.UUID;
 import meshservice.communication.JsonBuilder;
 import meshservice.communication.JsonReader;
 import meshservice.communication.RequestException;
@@ -21,7 +22,7 @@ public class APIGatewayAgent extends Agent{
     
     public APIGatewayAgent(AgentConfig config) throws IOException, ConfigException {
         super(config);
-        runningServices.put("APIGateway", new APIGateway());
+        runningServices.put(UUID.randomUUID(), new APIGateway());
     }
 
     @Override
