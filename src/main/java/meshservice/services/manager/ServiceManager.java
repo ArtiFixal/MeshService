@@ -134,43 +134,36 @@ public class ServiceManager extends Service{
             throws IOException,RequestException{
         final JsonReader reader=new JsonReader(request);
         System.out.println(reader.getRequestNode().toPrettyString());
-        String type=reader.readString("type").toLowerCase();
         String action=reader.readString("action").toLowerCase();
         String agentName=reader.readString("agent");
-        switch(type){
-            case "request" -> {
-                switch(action){
-                    case "registeragent" -> {
-                        String agentUUID=reader.readString("serviceID");
-                        AgentServicesInfo agent=new AgentServicesInfo(agentUUID,
-                                currentClient.getInetAddress().getHostName(),
-                                currentClient.getPort(),
-                                reader.readArrayOf("availableServices"));
-                        agentContainer.registerAgent(agentName,agent);
-                        System.out.println("[Info]: New agent registered: "+agentName);
-                    }
-                    case "servicestatuschange" -> {
-                        String serviceUUID=reader.readString("serviceID");
-                        String serviceType=reader.readString("service");
-                        int newStatus=reader.readNumber("newStatus",Integer.class);
-                        agentContainer.changeServiceStatus(agentName,serviceType,
-                            serviceUUID,ServiceStatus.interperFromNumber(newStatus));
-                    }
-                    case "renewtimer" -> {
-                        String serviceUUID=reader.readString("serviceID");
-                        String serviceType=reader.readString("service");
-                        agentContainer.renewServiceTimer(agentName,serviceType,serviceUUID);
-                    }
-                    case "askforservice" -> {
-                        String serviceType=reader.readString("service");
-                        processServiceAsk(serviceType,response);
-                    }
-                    default ->
-                        throw new RequestException("Unknown request action");
-                }
+        switch(action){
+            case "registeragent" -> {
+                String agentUUID=reader.readString("serviceID");
+                AgentServicesInfo agent=new AgentServicesInfo(agentUUID,
+                        currentClient.getInetAddress().getHostName(),
+                        currentClient.getPort(),
+                        reader.readArrayOf("availableServices"));
+                agentContainer.registerAgent(agentName,agent);
+                System.out.println("[Info]: New agent registered: "+agentName);
+            }
+            case "servicestatuschange" -> {
+                String serviceUUID=reader.readString("serviceID");
+                String serviceType=reader.readString("service");
+                int newStatus=reader.readNumber("newStatus",Integer.class);
+                agentContainer.changeServiceStatus(agentName,serviceType,
+                        serviceUUID,ServiceStatus.interperFromNumber(newStatus));
+            }
+            case "renewtimer" -> {
+                String serviceUUID=reader.readString("serviceID");
+                String serviceType=reader.readString("service");
+                agentContainer.renewServiceTimer(agentName,serviceType,serviceUUID);
+            }
+            case "askforservice" -> {
+                String serviceType=reader.readString("service");
+                processServiceAsk(serviceType,response);
             }
             default ->
-                throw new RequestException("Unknown request type");
+                throw new RequestException("Unknown request action");
         }
         response.addField("type","response");
         response.setStatus(200);

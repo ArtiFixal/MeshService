@@ -37,43 +37,34 @@ public class ServiceAgent extends Agent{
     public void processRequest(BufferedInputStream request,JsonBuilder response) throws IOException,RequestException,SQLException{
         final JsonReader reader=new JsonReader(request);
         System.out.println("Received: "+reader.getRequestNode().toPrettyString());
-        String type=reader.readString("type").toLowerCase();
-        switch(type){
-            case "request" ->{
-                int messageID=reader.readNumber("messageID",Integer.class);
-                response.addField("responseText",messageID);
-                String action=reader.readString("action").toLowerCase();
-                String serviceType=reader.readString("service");
-                switch(action){
-                    // Manager request to run given service
-                    case "run" -> {
-                        int port=reader.readNumberPositive("port",Integer.class);
-                        Service serv=runService(serviceType,port);
-                        runningServices.put(serv.getServiceID(),serv);
-                        response.addField("serviceID",serv.getServiceID());
-                        response.addField("port",port);
-                    }
-                    case "closeservice" -> {
-                        UUID serviceUUID=UUID.fromString(reader.readString("serviceID"));
-                        Service serv=runningServices.get(serviceUUID);
-                        updateServiceStatusAtManager(serviceUUID,ServiceStatus.CLOSING);
-                        serv.closeService();
-                        updateServiceStatusAtManager(serviceUUID,ServiceStatus.CLOSED);
-                        runningServices.remove(serviceUUID);
-                    }
-                    default ->
-                        throw new RequestException("Unknown request action.");
-                }
-                // Setting response fields
-                response.addField("service",serviceType);
-                response.addField("type","response");
-                response.setStatus(200);
+        int messageID=reader.readNumber("messageID",Integer.class);
+        response.addField("responseText",messageID);
+        String action=reader.readString("action").toLowerCase();
+        String serviceType=reader.readString("service");
+        switch(action){
+            // Manager request to run given service
+            case "run" -> {
+                int port=reader.readNumberPositive("port",Integer.class);
+                Service serv=runService(serviceType,port);
+                runningServices.put(serv.getServiceID(),serv);
+                response.addField("serviceID",serv.getServiceID());
+                response.addField("port",port);
             }
-            case "response" -> 
-                System.out.println("Received: "+reader.getRequestNode().toPrettyString());
-            default -> 
-                throw new RequestException("Unknown request type.");
+            case "closeservice" -> {
+                UUID serviceUUID=UUID.fromString(reader.readString("serviceID"));
+                Service serv=runningServices.get(serviceUUID);
+                updateServiceStatusAtManager(serviceUUID,ServiceStatus.CLOSING);
+                serv.closeService();
+                updateServiceStatusAtManager(serviceUUID,ServiceStatus.CLOSED);
+                runningServices.remove(serviceUUID);
+            }
+            default ->
+                throw new RequestException("Unknown request action.");
         }
+        // Setting response fields
+        response.addField("service",serviceType);
+        response.addField("type","response");
+        response.setStatus(200);
     }
 
     @Override
