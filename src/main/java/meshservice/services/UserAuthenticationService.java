@@ -51,7 +51,7 @@ public class UserAuthenticationService extends Service{
                 int apiKey=loggedIn.hashCode();
                 response.addField("userID",loggedIn.getId())
                     .addField("apiKey",apiKey)
-                    .setStatus(200);
+                    .setStatus("User logged in successfully",200);
             }
             else
                 throw new RequestException("There is no user with given credentials");

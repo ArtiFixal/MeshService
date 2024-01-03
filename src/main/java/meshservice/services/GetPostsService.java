@@ -67,7 +67,7 @@ public class GetPostsService extends Service {
             if (action.equals("getPosts")) {
                 // TODO: change the way of serializing lists into JSON
                 response.addArray("posts", dao.getRecentPosts(ownerID))
-                        .setStatus(200);
+                        .setStatus("Posts found",200);
             } else {
                 throw new RequestException("Unsupported method");
             }
