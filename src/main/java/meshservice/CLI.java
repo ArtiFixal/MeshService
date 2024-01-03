@@ -105,7 +105,7 @@ public class CLI {
                     continue;
                 }
             }
-            try (Socket serviceSocket = new Socket("localhost", 10000)) {
+            try (Socket serviceSocket = new Socket("localhost", 10001)) {
                 // Send request to API Gateway
                 BufferedOutputStream toAPI = new BufferedOutputStream(serviceSocket.getOutputStream());
                 toAPI.write(jsonRequest.toBytes());
