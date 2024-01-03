@@ -33,11 +33,11 @@ public class UserDAO extends DAOObject{
      */
     public long insertUser(String login,String password) throws SQLException
     {
-        PreparedStatement existanceCheck=con.prepareStatement("SELECT id FROM users WHERE login=?");
+        PreparedStatement existanceCheck=con.prepareStatement("SELECT id FROM users WHERE username=?");
         existanceCheck.setString(1,login);
         if(!existanceCheck.executeQuery().next())
         {
-            try(PreparedStatement insertStatement=con.prepareStatement("INSERT INTO users VALUES(NULL,?,?,?)"))
+            try(PreparedStatement insertStatement=con.prepareStatement("INSERT INTO users VALUES(NULL,?,?)"))
             {
                 insertStatement.setString(1,login);
                 String hash=hashPassword(password);
@@ -61,11 +61,12 @@ public class UserDAO extends DAOObject{
      */
     public User loginAs(String login,String password) throws SQLException
     {
-        PreparedStatement selectUser=con.prepareStatement("SELECT id,role,hash FROM users WHERE login=?");
+        PreparedStatement selectUser=con.prepareStatement("SELECT id,password FROM users WHERE username=?");
+        selectUser.setString(1,login);
         ResultSet user=selectUser.executeQuery();
         if(user.next())
         {
-            String passwordHash=user.getString(3);
+            String passwordHash=user.getString(2);
             if(passwordHash.equals(hashPassword(password)))
                 return new User(user.getLong(1),login);
         }
