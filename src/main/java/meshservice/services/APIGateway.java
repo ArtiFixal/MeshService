@@ -14,7 +14,7 @@ import meshservice.communication.RequestException;
  * 
  * @author ArtiFixal
  */
-public class APIGateway extends MultithreadService{
+public class APIGateway extends Service{
     public static final String[] REQUEST_REQUIRED_FIELDS=new String[]{"action"};
     
     /**
@@ -33,7 +33,7 @@ public class APIGateway extends MultithreadService{
     
     public APIGateway(int port) throws IOException {
         super(port);
-        agentConnection=new Socket("localhost", 8000);
+        agentConnection=new Socket("localhost", 10000);
         agentConnection.setKeepAlive(true);
     }
 
@@ -49,14 +49,12 @@ public class APIGateway extends MultithreadService{
      */
     protected JsonReader sendToAgent(JsonBuilder request) throws IOException, RequestException
     {
-        try(BufferedInputStream in = new BufferedInputStream(agentConnection.getInputStream());
-                BufferedOutputStream out = new BufferedOutputStream(agentConnection.getOutputStream()))
-        {
+        BufferedInputStream in=new BufferedInputStream(agentConnection.getInputStream());
+        BufferedOutputStream out=new BufferedOutputStream(agentConnection.getOutputStream());
             out.write(request.toBytes());
             out.flush();
-            System.out.println("Request sent to the agent: " + request.getJson().toPrettyString());
-            return new JsonReader(in);
-        }
+            System.out.println("Request sent to the ApiGateway agent: "+request.getJson().toPrettyString());
+            return new JsonReader(in); 
     }
     
     /**
@@ -85,29 +83,38 @@ public class APIGateway extends MultithreadService{
     }
 
     @Override
+    public String[] getAdditionalResponseFields(){
+        return EMPTY_ARRAY;
+    }
+
+    @Override
     public void processRequest(BufferedInputStream request, JsonBuilder response)
             throws IOException, RequestException
     {
         final JsonReader reader=new JsonReader(request);
         String action=reader.readString("action");
-        System.out.println("Received: "+reader.getRequestNode().toPrettyString());
+        System.out.println("ApiGateway request: "+reader.getRequestNode().toPrettyString());
         // Ask API Gateway agent for service host and port
-        final JsonBuilder agentRequest=new JsonBuilder("process");
+        final JsonBuilder agentRequest=new JsonBuilder("getServiceInfo");
         assignMessageID(agentRequest);
-        agentRequest.addField("action", "getServiceInfo");
-        agentRequest.addField("service", action);
-        agentRequest.addField("type", "request");
+        agentRequest.addField("service", action)
+            .addField("type", "request");
         JsonReader agentResponse=sendToAgent(agentRequest);
         // Communicate with service
         String serviceHost=agentResponse.readString("host");
         int servicePort=agentResponse.readNumber("port", Integer.class);
         final JsonBuilder serviceRequest=new JsonBuilder();
-        // Forward request required fields
+        // Forward only request required fields and drop unwanted
         for(String field:agentResponse.readArrayOf("requiredFields"))
         {
-            serviceRequest.addField(field,reader.readString(field));
+            serviceRequest.setNode(field,reader.getNode(field));
         }
         JsonReader serviceResponse=communicateWithHost(serviceHost, servicePort, serviceRequest);
+        // Forward additional response fields
+        for(String field:agentResponse.readArrayOf("additionalFields"))
+        {
+            response.setNode(field,serviceResponse.getNode(field));
+        }
         String responseText=serviceResponse.readString("responseText");
         response.setStatus(responseText,200);
     }

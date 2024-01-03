@@ -44,6 +44,11 @@ public class AddPostService extends Service {
     public String[] getRequiredRequestFields(){
         return REQUEST_REQUIRED_FIELDS;
     }
+    
+    @Override
+    public String[] getAdditionalResponseFields(){
+        return EMPTY_ARRAY;
+    }
 
     /**
      * Processes a request to add a post. The request is read from the provided BufferedInputStream,

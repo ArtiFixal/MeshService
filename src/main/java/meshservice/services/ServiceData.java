@@ -8,6 +8,7 @@ import meshservice.ServiceStatus;
  * @author ArtiFixal
  */
 public class ServiceData {
+    public static final String[] EMPTY_ARRAY=new String[0];
     /**
      * What this service does.
      */
@@ -17,6 +18,11 @@ public class ServiceData {
      * Fields which request must contain.
      */
     public String[] serviceRequestRequiredFields;
+    
+    /**
+     * Fields which response to the client should contain.
+     */
+    public String[] serviceAdditionalResponseFields;
     
     /**
      * Current status of the service.
@@ -33,18 +39,29 @@ public class ServiceData {
      */
     private final int port;
 
-    public ServiceData(String serviceType,int port) {
-        this.serviceType=serviceType;
-        status=ServiceStatus.STARTING;
-        inactiveTimer=0;
-        this.port=port;
+    public ServiceData(String serviceType,int port)
+    {
+        this(serviceType,port,ServiceStatus.STARTING,EMPTY_ARRAY,EMPTY_ARRAY);
+    }
+    
+    public ServiceData(String serviceType,int port,String[] serviceRequestRequiredFields)
+    {
+        this(serviceType,port,ServiceStatus.STARTING,
+            serviceRequestRequiredFields,EMPTY_ARRAY);
+    }
+    
+    public ServiceData(String serviceType,int port,ServiceStatus status,String[] serviceRequestRequiredFields){
+        this(serviceType,port,status,serviceRequestRequiredFields,EMPTY_ARRAY);
     }
 
-    public ServiceData(String serviceType,int port,ServiceStatus status) {
+    public ServiceData(String serviceType,int port,ServiceStatus status,String[] serviceRequestRequiredFields,String[] serviceAdditionalResponseFields)
+    {
         this.serviceType=serviceType;
         this.status=status;
         inactiveTimer=0;
         this.port=port;
+        this.serviceRequestRequiredFields=serviceRequestRequiredFields;
+        this.serviceAdditionalResponseFields=serviceAdditionalResponseFields;
     }
 
     public String getServiceType() {
@@ -65,6 +82,10 @@ public class ServiceData {
 
     public String[] getServiceRequestRequiredFields(){
         return serviceRequestRequiredFields;
+    }
+
+    public String[] getServiceAdditionalResponseFields(){    
+        return serviceAdditionalResponseFields;
     }
     
     public void setStatus(ServiceStatus status) {

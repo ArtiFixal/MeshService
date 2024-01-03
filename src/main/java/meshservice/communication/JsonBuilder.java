@@ -43,6 +43,11 @@ public class JsonBuilder{
 	public ObjectNode getJson(){
 		return json;
 	}
+        
+        public JsonBuilder setNode(String field,JsonNode node){
+            json.set(field,node);
+            return this;
+        }
 	
 	public<T> JsonBuilder addField(String field,T value)
 	{

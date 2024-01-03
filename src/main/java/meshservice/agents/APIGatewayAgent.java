@@ -22,7 +22,8 @@ public class APIGatewayAgent extends Agent{
     
     public APIGatewayAgent(AgentConfig config) throws IOException, ConfigException {
         super(config);
-        runningServices.put(UUID.randomUUID(), new APIGateway());
+        int firstApiGatewayInstancePort=config.getAgentPort()+1;
+        runningServices.put(UUID.randomUUID(),new APIGateway(firstApiGatewayInstancePort));
     }
 
     @Override
@@ -36,6 +37,11 @@ public class APIGatewayAgent extends Agent{
     }
     
     @Override
+    public String[] getAdditionalResponseFields(){
+        return EMPTY_ARRAY;
+    }
+    
+    @Override
     public String[] getAvailableServices(){
         final String[] services=new String[]{"apigateway"};
         return services;
@@ -46,6 +52,7 @@ public class APIGatewayAgent extends Agent{
             throws IOException, RequestException
     {
         final JsonReader reader=new JsonReader(request);
+        System.out.println("ApiGateway Agent: "+reader.getRequestNode().toPrettyString());
         String action=reader.readString("action").toLowerCase();
         switch (action) {
             case "getserviceinfo" -> {
@@ -53,7 +60,8 @@ public class APIGatewayAgent extends Agent{
                 ServiceHostport managerResponse=askManagerForServiceHostport(serviceType);
                 response.addField("host", managerResponse.getHost())
                     .addField("port", managerResponse.getPort())
-                    .addArray("requiredFields",managerResponse.getRequestRequiredFields());
+                    .addArray("requiredFields",managerResponse.getRequestRequiredFields())
+                    .addArray("additionalFields",managerResponse.getAdditionalResponseFields());
             }
             default -> throw new RequestException("Unknown request action!");
         }
@@ -74,11 +82,13 @@ public class APIGatewayAgent extends Agent{
             throws IOException,RequestException
     {
         final JsonBuilder request=new JsonBuilder("askForService")
+                .addField("type","request")
                 .addField("agent", config.getAgentName())
                 .addField("service", ServiceName);
         JsonReader response=communicateWithManager(request);
         return new ServiceHostport(response.readArrayOf("requiredFields")
                 .toArray(String[]::new),
+            response.readArrayOf("additionalFields").toArray(String[]::new),
             response.readString("host"),
             response.readNumberPositive("port",Integer.class));
     }

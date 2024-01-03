@@ -32,31 +32,42 @@ public class ServiceAgent extends Agent{
     public String[] getRequiredRequestFields(){
         return REQUEST_REQUIRED_FIELDS;
     }
+    
+    @Override
+    public String[] getAdditionalResponseFields(){
+        return EMPTY_ARRAY;
+    }
 
     @Override
     public void processRequest(BufferedInputStream request,JsonBuilder response) throws IOException,RequestException,SQLException{
         final JsonReader reader=new JsonReader(request);
-        System.out.println("Received: "+reader.getRequestNode().toPrettyString());
-        int messageID=reader.readNumber("messageID",Integer.class);
-        response.addField("responseText",messageID);
+        System.out.println("Service agent request: "+reader.getRequestNode().toPrettyString());
         String action=reader.readString("action").toLowerCase();
-        String serviceType=reader.readString("service");
+        String serviceType=reader.readString("service").toLowerCase();
         switch(action){
             // Manager request to run given service
             case "run" -> {
                 int port=reader.readNumberPositive("port",Integer.class);
                 Service serv=runService(serviceType,port);
-                runningServices.put(serv.getServiceID(),serv);
-                response.addField("serviceID",serv.getServiceID());
-                response.addField("port",port);
+                System.out.println("[Info]: Agent started service: "+serviceType);
+                synchronized(runningServices){
+                    runningServices.put(serv.getServiceID(),serv);
+                    response.addField("serviceID",serv.getServiceID())
+                            .addField("host",serverSocket.getInetAddress().getHostName())
+                            .addField("port",serv.getPort())
+                            .addArray("requiredFields",serv.getRequiredRequestFields())
+                            .addArray("additionalFields",serv.getAdditionalResponseFields());
+                }
             }
             case "closeservice" -> {
                 UUID serviceUUID=UUID.fromString(reader.readString("serviceID"));
-                Service serv=runningServices.get(serviceUUID);
-                updateServiceStatusAtManager(serviceUUID,ServiceStatus.CLOSING);
-                serv.closeService();
-                updateServiceStatusAtManager(serviceUUID,ServiceStatus.CLOSED);
-                runningServices.remove(serviceUUID);
+                synchronized(runningServices){
+                    Service serv=runningServices.get(serviceUUID);
+                    updateServiceStatusAtManager(serviceUUID,serviceType,ServiceStatus.CLOSING);
+                    serv.closeService();
+                    updateServiceStatusAtManager(serviceUUID,serviceType,ServiceStatus.CLOSED);
+                    runningServices.remove(serviceUUID);
+                }
             }
             default ->
                 throw new RequestException("Unknown request action.");

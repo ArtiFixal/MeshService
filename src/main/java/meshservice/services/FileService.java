@@ -41,6 +41,11 @@ public class FileService extends Service {
     public String[] getRequiredRequestFields(){
         return REQUEST_REQUIRED_FIELDS;
     }
+    
+    @Override
+    public String[] getAdditionalResponseFields(){
+        return EMPTY_ARRAY;
+    }
 
     /**
      * Processes file-specific requests. Depending on the action specified in the request,

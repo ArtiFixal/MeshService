@@ -99,8 +99,9 @@ public class ServiceManager extends Service{
                         }
                         if(service.getInactiveTimer()>=MAX_INACTIVITY){
                             final JsonBuilder closeRequest=new JsonBuilder("closeService")
-                                .addField("service",service.getServiceType())
-                                .addField("type","request");
+                                    .addField("type","request")
+                                    .addField("serviceID",serviceUUID)
+                                    .addField("service",serviceType);
                             try{
                                 communicateWithServiceAgent(agentName,closeRequest);
                                 loadBalancer.removeServiceDestination(agentName,serviceType,service);
@@ -128,12 +129,17 @@ public class ServiceManager extends Service{
     public String[] getRequiredRequestFields(){
         return REQUEST_REQUIRED_FIELDS;
     }
+    
+    @Override
+    public String[] getAdditionalResponseFields(){
+        return EMPTY_ARRAY;
+    }
 
     @Override
     public void processRequest(BufferedInputStream request,JsonBuilder response)
             throws IOException,RequestException{
         final JsonReader reader=new JsonReader(request);
-        System.out.println(reader.getRequestNode().toPrettyString());
+        System.out.println("Manager request: "+reader.getRequestNode().toPrettyString());
         String action=reader.readString("action").toLowerCase();
         String agentName=reader.readString("agent");
         switch(action){
@@ -141,25 +147,26 @@ public class ServiceManager extends Service{
                 String agentUUID=reader.readString("serviceID");
                 AgentServicesInfo agent=new AgentServicesInfo(agentUUID,
                         currentClient.getInetAddress().getHostName(),
-                        currentClient.getPort(),
+                        reader.readNumberPositive("port",Integer.class),
                         reader.readArrayOf("availableServices"));
                 agentContainer.registerAgent(agentName,agent);
                 System.out.println("[Info]: New agent registered: "+agentName);
             }
             case "servicestatuschange" -> {
                 String serviceUUID=reader.readString("serviceID");
-                String serviceType=reader.readString("service");
-                int newStatus=reader.readNumber("newStatus",Integer.class);
+                String serviceType=reader.readString("service").toLowerCase();
+                int newStatusCode=reader.readNumber("newStatus",Integer.class);
+                ServiceStatus newStatus=ServiceStatus.interperFromNumber(newStatusCode);
                 agentContainer.changeServiceStatus(agentName,serviceType,
-                        serviceUUID,ServiceStatus.interperFromNumber(newStatus));
+                        serviceUUID,newStatus);
             }
             case "renewtimer" -> {
                 String serviceUUID=reader.readString("serviceID");
-                String serviceType=reader.readString("service");
+                String serviceType=reader.readString("service").toLowerCase();
                 agentContainer.renewServiceTimer(agentName,serviceType,serviceUUID);
             }
             case "askforservice" -> {
-                String serviceType=reader.readString("service");
+                String serviceType=reader.readString("service").toLowerCase();
                 processServiceAsk(serviceType,response);
             }
             default ->
@@ -241,10 +248,13 @@ public class ServiceManager extends Service{
         try{
             AgentHostport agentDestination=loadBalancer.balanceAgent(serviceType);
             JsonReader agentResponse=sendServiceStartRequest(agentDestination,serviceType);
-            Hostport askedFor=new Hostport(agentContainer.getAgentInfo(agentDestination.getAgentName()).getHost(),
-                agentResponse.readNumber("port",Integer.class));
+            int port=agentResponse.readNumber("port",Integer.class);
             String serviceUUID=agentResponse.readString("serviceID");
-            agentContainer.registerService(agentDestination.getAgentName(),serviceUUID,serviceType,askedFor.getPort());
+            String[] requestRequiredFields=agentResponse.readArrayOf("requiredFields")
+                .toArray(String[]::new);
+            String[] additionalFields=agentResponse.readArrayOf("additionalFields")
+                    .toArray(String[]::new);
+            agentContainer.registerService(agentDestination.getAgentName(),serviceUUID,serviceType,port,requestRequiredFields,additionalFields);
             return agentResponse;
         }catch(ServiceNotFoundException e){
             throw new RequestException("Service not found");
@@ -272,7 +282,11 @@ public class ServiceManager extends Service{
                     JsonReader agentResponse=sendServiceStartRequest(agentDestination,serviceType);
                     String serviceUUID=agentResponse.readString("serviceID");
                     int servicePort=agentResponse.readNumber("port",Integer.class);
-                    agentContainer.registerService(agentDestination.getAgentName(),serviceUUID,serviceType,servicePort);
+                    String[] requestRequiredFields=agentResponse.readArrayOf("requiredFields")
+                        .toArray(String[]::new);
+                    String[] additionalFields=agentResponse.readArrayOf("additionalFields")
+                    .toArray(String[]::new);
+                    agentContainer.registerService(agentDestination.getAgentName(),serviceUUID,serviceType,servicePort,requestRequiredFields,additionalFields);
                 };
                 serviceTypeTraffic.put(serviceType,new ServiceTraffic(SERVICE_INVOKE_RATIO,invokeCallback));
             }
@@ -280,17 +294,23 @@ public class ServiceManager extends Service{
         ServiceHostport askedFor;
         try{
             askedFor=loadBalancer.balanceService(serviceType);
+            // renew timer
+            System.out.println("[Info]: Reused service: "+serviceType+" at: "+askedFor);
         }catch(ServiceNotFoundException e){
             JsonReader agentResponse=requestServiceStart(serviceType);
             String[] requiredFields=agentResponse.readArrayOf("requiredFields")
-                .toArray(String[]::new);
-            askedFor=new ServiceHostport(requiredFields,
+                    .toArray(String[]::new);
+            String[] additionalFields=agentResponse.readArrayOf("additionalFields")
+                    .toArray(String[]::new);
+            askedFor=new ServiceHostport(requiredFields,additionalFields,
                 agentResponse.readString("host"),
                 agentResponse.readNumber("port",Integer.class));
+            System.out.printf("[Info]: Started new service: %s at: %s\n",serviceType,askedFor);
         }
         response.addField("host",askedFor.getHost())
                 .addField("port",askedFor.getPort())
-                .addArray("requiredFields",askedFor.getRequestRequiredFields());
+                .addArray("requiredFields",askedFor.getRequestRequiredFields())
+                .addArray("additionalFields",askedFor.getAdditionalResponseFields());
     }
 
     @Override
@@ -406,14 +426,14 @@ public class ServiceManager extends Service{
          * @param serviceType New service type.
          * @param servicePort New service port.
          */
-        public void registerService(String agentName,String serviceUUID,String serviceType,int servicePort)
+        public void registerService(String agentName,String serviceUUID,String serviceType,int servicePort,String[] requiredRequestFields,String[] additionalFields)
         {
-            ServiceData newService=new ServiceData(serviceType,servicePort);
+            ServiceData newService=new ServiceData(serviceType,servicePort,ServiceStatus.RUNNING,requiredRequestFields);
             synchronized(runningAgents){
-                runningAgents.get(agentName).getRunningServices().get(serviceType).put(serviceUUID,newService);
+                runningAgents.get(agentName).addNewService(serviceType,serviceUUID,newService);
                 loadBalancer.addNewServiceDestination(agentName,serviceType,newService);
             }
-            System.out.println("[Info]: New service registered: "+serviceType+" in agent:"+agentName);
+            System.out.println("[Info]: New service registered: "+serviceType+" in agent: "+agentName);
         }
         
         /**
@@ -427,8 +447,14 @@ public class ServiceManager extends Service{
         public synchronized void changeServiceStatus(String agentName,
             String serviceType,String serviceUUID,ServiceStatus newStatus)
         {
-            runningAgents.get(agentName).setServiceStatus(serviceType,
-                serviceUUID,newStatus);
+            if(runningAgents.get(agentName).getRunningServices()
+                    .get(serviceType).containsKey(serviceUUID))
+            {
+                runningAgents.get(agentName).setServiceStatus(serviceType,
+                    serviceUUID,newStatus);
+                System.out.printf("[Info]: Changed service: %s (%s) status to: %s\n",
+                            serviceUUID,serviceType,newStatus);
+            }
         }
         
         /**

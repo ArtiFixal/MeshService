@@ -43,6 +43,11 @@ public class GetPostsService extends Service {
     public String[] getRequiredRequestFields(){
         return REQUEST_REQUIRED_FIELDS;
     }
+    
+    @Override
+    public String[] getAdditionalResponseFields(){
+        return new String[]{"posts"};
+    }
 
     /**
      * Processes a request to get posts. The request is read from the provided BufferedInputStream,

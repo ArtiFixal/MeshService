@@ -12,16 +12,26 @@ public class ServiceHostport extends Hostport{
      */
     public String[] requestRequiredFields;
     
-    public ServiceHostport(String[] requestRequiredFields,int port){
-        this(requestRequiredFields,"localhost",port);
+    /**
+     * Fields which response contain in addition to responseText.
+     */
+    public String[] additionalResponseFields;
+    
+    public ServiceHostport(String[] requestRequiredFields,String[] additionalResponseFields,int port){
+        this(requestRequiredFields,additionalResponseFields,"localhost",port);
     }
     
-    public ServiceHostport(String[] requestRequiredFields,String host,int port){
+    public ServiceHostport(String[] requestRequiredFields,String[] additionalResponseFields,String host,int port){
         super(host,port);
         this.requestRequiredFields=requestRequiredFields;
+        this.additionalResponseFields=additionalResponseFields;
     }
 
     public String[] getRequestRequiredFields(){
         return requestRequiredFields;
+    }
+
+    public String[] getAdditionalResponseFields(){
+        return additionalResponseFields;
     }
 }

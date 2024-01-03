@@ -36,12 +36,17 @@ public abstract class Agent extends MultithreadService{
     public Agent(AgentConfig config) throws IOException,ConfigException{
         super(config.getAgentPort());
         this.config=config;
-        registerAgentAtManager();
+        initAgent();
     }
 
     public Agent(String name,int port,String managerHost,int managerPort) throws IOException{
         super(port);
         config=new AgentConfig(name,managerPort,managerHost,managerPort);
+        initAgent();
+    }
+    
+    private void initAgent()
+    {
         runningServices=new HashMap<>();
         registerAgentAtManager();
     }
@@ -86,25 +91,25 @@ public abstract class Agent extends MultithreadService{
     {
         Service serv=startService(serviceType,port);
         runningServices.put(serv.getServiceID(),serv);
-        updateServiceStatusAtManager(serv.getServiceID(),ServiceStatus.RUNNING);
+        //updateServiceStatusAtManager(serv.getServiceID(),serviceType,ServiceStatus.RUNNING);
         return serv;
     }
 
     /**
      * Resets service inactivity timer.
      *
-     * @param serviceName Service which timer will be reset
+     * @param serviceType Service which timer will be reset
      * 
      * @throws IOException If any socket error occurres.
      */
-    protected void renewTimer(String serviceName) throws IOException
+    protected void renewTimer(String serviceType) throws IOException
     {
         try(Socket toManager=new Socket(config.getManagerHost(),config.getManagerPort()))
         {
             try(BufferedOutputStream out=new BufferedOutputStream(toManager.getOutputStream())){
                 JsonBuilder renewRequest=new JsonBuilder("renewtimer");
                 renewRequest.addField("agent",config.getAgentName());
-                renewRequest.addField("service",serviceName);
+                renewRequest.addField("service",serviceType);
                 out.write(renewRequest.toBytes());
             }
         }
@@ -148,6 +153,7 @@ public abstract class Agent extends MultithreadService{
     private void registerAgentAtManager()
     {
         final JsonBuilder request=new JsonBuilder("registerAgent")
+                .addField("type","request")
                 .addField("agent",config.getAgentName())
                 .addField("serviceID",getServiceID())
                 .addField("port",getPort())
@@ -168,18 +174,21 @@ public abstract class Agent extends MultithreadService{
      * Updates given service status at the manager.
      * 
      * @param serviceID UUID of service to change status.
+     * @param serviceType What the service does.
      * @param status New status.
      * 
      * @throws IOException If any socket error occurred.
      * @throws RequestException If request was malformed.
      */
-    public void updateServiceStatusAtManager(UUID serviceID,ServiceStatus status)
-            throws IOException,RequestException
+    public void updateServiceStatusAtManager(UUID serviceID,String serviceType,
+            ServiceStatus status) throws IOException,RequestException
     {
         final JsonBuilder request=new JsonBuilder("serviceStatusChange")
+                .addField("type","request")
                 .addField("agent",config.getAgentName())
                 .addField("serviceID",serviceID)
-                .addField("newStatus",status);
+                .addField("service",serviceType)
+                .addField("newStatus",status.getStatusCode());
         communicateWithManager(request);
     }
 }

@@ -18,6 +18,8 @@ import meshservice.communication.JsonReader;
  * @author ArtiFixal
  */
 public abstract class Service extends Thread{
+    public static final String[] EMPTY_ARRAY=new String[0];
+    
     /**
      * Socket on which service will listen for clients.
      */
@@ -63,6 +65,11 @@ public abstract class Service extends Thread{
     public abstract String[] getRequiredRequestFields();
     
     /**
+     * @return Fields which in addition to responseText create response.
+     */
+    public abstract String[] getAdditionalResponseFields();
+    
+    /**
      * Sets up client socket.
      *
      * @return Configured socket.
@@ -100,6 +107,7 @@ public abstract class Service extends Thread{
             try(Socket clientSocket=prepareSocket()){
                 processSocket(clientSocket);
             }catch(Exception e){
+                e.printStackTrace();
                 System.out.println(e);
             }
             sleepFor(50);
