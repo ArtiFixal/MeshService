@@ -111,12 +111,16 @@ public class APIGateway extends Service{
         }
         JsonReader serviceResponse=communicateWithHost(serviceHost, servicePort, serviceRequest);
         // Forward additional response fields
-        for(String field:agentResponse.readArrayOf("additionalFields"))
+        final int serviceResponseStatus=serviceResponse.readNumber("status",Integer.class);
+        if(serviceResponseStatus==200)
         {
-            response.setNode(field,serviceResponse.getNode(field));
+            for(String field:agentResponse.readArrayOf("additionalFields"))
+            {
+                response.setNode(field,serviceResponse.getNode(field));
+            }
         }
         String responseText=serviceResponse.readString("responseText");
-        response.setStatus(responseText,200);
+        response.setStatus(responseText,serviceResponseStatus);
     }
 
     @Override

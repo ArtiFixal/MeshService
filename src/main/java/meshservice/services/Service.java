@@ -89,13 +89,15 @@ public abstract class Service extends Thread{
         try(BufferedInputStream request=new BufferedInputStream(clientSocket.getInputStream());
                 BufferedOutputStream response=new BufferedOutputStream(clientSocket.getOutputStream()))
         {
-            processRequest(request,responseToSend);
+            try{
+                processRequest(request,responseToSend);
+            }catch(Exception e){
+                System.out.println(e);
+                processException(responseToSend,e);
+                e.printStackTrace();
+            }
             response.write(responseToSend.toBytes());
             response.flush();
-        }catch(Exception e){
-            System.out.println(e);
-            e.printStackTrace();
-            processException(responseToSend,e);
         }
     }
 
@@ -106,9 +108,9 @@ public abstract class Service extends Thread{
         {
             try(Socket clientSocket=prepareSocket()){
                 processSocket(clientSocket);
-            }catch(Exception e){
-                e.printStackTrace();
+            }catch(IOException e){
                 System.out.println(e);
+                e.printStackTrace();
             }
             sleepFor(50);
         }
