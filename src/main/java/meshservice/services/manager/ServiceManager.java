@@ -232,7 +232,27 @@ public class ServiceManager extends Service{
     {
         final JsonBuilder request=createServiceStartRequest(serviceType);
         return communicateWithHost(agentDestination.getHost(),agentDestination.getPort(),request);
-    }    
+    }
+    
+    /**
+     * Registers just started service to the manager.
+     * 
+     * @param agentName Owner of the service.
+     * @param serviceType Type of service.
+     * @param agentResponse Response from agent.
+     * 
+     * @throws RequestException If request was malformed.
+     */
+    private void registerStartedService(String agentName,String serviceType,JsonReader agentResponse) throws RequestException
+    {
+        int servicePort=agentResponse.readNumber("port",Integer.class);
+        String serviceUUID=agentResponse.readString("serviceID");
+        String[] requestRequiredFields=agentResponse.readArrayOf("requiredFields")
+            .toArray(String[]::new);
+        String[] additionalFields=agentResponse.readArrayOf("additionalFields")
+            .toArray(String[]::new);
+        agentContainer.registerService(agentName,serviceUUID,serviceType,servicePort,requestRequiredFields,additionalFields);
+    }
 
     /**
      * Requests best {@code Agent} candidate to start given service type.
@@ -244,17 +264,12 @@ public class ServiceManager extends Service{
      * @throws IOException If any socket error occures.
      * @throws RequestException If request was malformed.
      */
-    protected JsonReader requestServiceStart(String serviceType) throws IOException,RequestException{
+    protected JsonReader requestServiceStart(String serviceType) throws IOException,RequestException
+    {
         try{
             AgentHostport agentDestination=loadBalancer.balanceAgent(serviceType);
             JsonReader agentResponse=sendServiceStartRequest(agentDestination,serviceType);
-            int port=agentResponse.readNumber("port",Integer.class);
-            String serviceUUID=agentResponse.readString("serviceID");
-            String[] requestRequiredFields=agentResponse.readArrayOf("requiredFields")
-                .toArray(String[]::new);
-            String[] additionalFields=agentResponse.readArrayOf("additionalFields")
-                    .toArray(String[]::new);
-            agentContainer.registerService(agentDestination.getAgentName(),serviceUUID,serviceType,port,requestRequiredFields,additionalFields);
+            registerStartedService(agentDestination.getAgentName(),serviceType,agentResponse);
             return agentResponse;
         }catch(ServiceNotFoundException e){
             throw new RequestException("Service not found");
@@ -280,13 +295,7 @@ public class ServiceManager extends Service{
                 ServiceInvoke invokeCallback=()->{
                     AgentHostport agentDestination=loadBalancer.balanceAgent(serviceType);
                     JsonReader agentResponse=sendServiceStartRequest(agentDestination,serviceType);
-                    String serviceUUID=agentResponse.readString("serviceID");
-                    int servicePort=agentResponse.readNumber("port",Integer.class);
-                    String[] requestRequiredFields=agentResponse.readArrayOf("requiredFields")
-                        .toArray(String[]::new);
-                    String[] additionalFields=agentResponse.readArrayOf("additionalFields")
-                    .toArray(String[]::new);
-                    agentContainer.registerService(agentDestination.getAgentName(),serviceUUID,serviceType,servicePort,requestRequiredFields,additionalFields);
+                    registerStartedService(agentDestination.getAgentName(),serviceType,agentResponse);
                 };
                 serviceTypeTraffic.put(serviceType,new ServiceTraffic(SERVICE_INVOKE_RATIO,invokeCallback));
             }
@@ -428,7 +437,7 @@ public class ServiceManager extends Service{
          */
         public void registerService(String agentName,String serviceUUID,String serviceType,int servicePort,String[] requiredRequestFields,String[] additionalFields)
         {
-            ServiceData newService=new ServiceData(serviceType,servicePort,ServiceStatus.RUNNING,requiredRequestFields);
+            ServiceData newService=new ServiceData(serviceType,servicePort,ServiceStatus.RUNNING,requiredRequestFields,additionalFields);
             synchronized(runningAgents){
                 runningAgents.get(agentName).addNewService(serviceType,serviceUUID,newService);
                 loadBalancer.addNewServiceDestination(agentName,serviceType,newService);
