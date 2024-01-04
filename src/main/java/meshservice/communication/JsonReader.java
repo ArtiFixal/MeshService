@@ -64,6 +64,21 @@ public class JsonReader{
     public JsonNode getRequestNode(){
         return requestNode;
     }
+    
+    /**
+     * Checks if JSON contains given field.
+     * 
+     * @param field What to check for.
+     * @return Exsistance of field.
+     */
+    public boolean hasField(String field)
+    {
+        try{
+            return isNull(getNode(field));
+        }catch(RequestException e){
+            return false;
+        }
+    }
 
     /**
      * Retrieves non null {@code JsonNode} from {@link #requestNode}.
