@@ -33,8 +33,6 @@ public class APIGateway extends Service{
     
     public APIGateway(int port) throws IOException {
         super(port);
-        agentConnection=new Socket("localhost", 10000);
-        agentConnection.setKeepAlive(true);
     }
 
     /**
@@ -49,12 +47,15 @@ public class APIGateway extends Service{
      */
     protected JsonReader sendToAgent(JsonBuilder request) throws IOException, RequestException
     {
-        BufferedInputStream in=new BufferedInputStream(agentConnection.getInputStream());
-        BufferedOutputStream out=new BufferedOutputStream(agentConnection.getOutputStream());
+        agentConnection=new Socket("localhost", 10000);
+        try(BufferedInputStream in=new BufferedInputStream(agentConnection.getInputStream());
+                BufferedOutputStream out=new BufferedOutputStream(agentConnection.getOutputStream()))
+        {
             out.write(request.toBytes());
             out.flush();
             System.out.println("Request sent to the ApiGateway agent: "+request.getJson().toPrettyString());
             return new JsonReader(in); 
+        }
     }
     
     /**
