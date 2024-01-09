@@ -152,6 +152,21 @@ public class JsonReader{
     public String readStringNullable(String fieldName){
         return readNullable(()->readString(fieldName));
     }
+    
+    /**
+     * Reads object from fiven JSON field.
+     * 
+     * @param <T> Type to read.
+     * @param fieldName Name of field to read from.
+     * @param classToRead What to read.
+     * 
+     * @return
+     * @throws RequestException If field is null or instance of {@code NullNode}.
+     * @throws IllegalArgumentException If unable to read object.
+     */
+    public<T> T readObject(String fieldName,Class<T> classToRead) throws RequestException,IllegalArgumentException{
+        return mapper.convertValue(getNode(fieldName),classToRead);
+    }
 
     /**
      * Reads number from given field.
@@ -259,11 +274,13 @@ public class JsonReader{
      * 
      * @return Read array of numbers.
      */
-    public <T extends Number> ArrayList<T> readArrayOf(String fieldName,Class<T> clazz)
+    public <T> ArrayList<T> readArrayOf(String fieldName,Class<T> clazz)
     {
         if(clazz.equals(BigDecimal.class)||clazz.equals(BigInteger.class))
             return readArrayFromNode(fieldName,(node)->clazz.getConstructor(String.class).newInstance(node.textValue()));
-        return readArrayFromNode(fieldName,(node)->(T)clazz.getMethod("valueOf",String.class).invoke(null,node.asText()));
+        else if(clazz.isInstance(Number.class))
+            return readArrayFromNode(fieldName,(node)->(T)clazz.getMethod("valueOf",String.class).invoke(null,node.asText()));
+        return readArrayFromNode(fieldName,(node)->mapper.convertValue(node,clazz));
     }
 
     /**
