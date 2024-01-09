@@ -5,10 +5,10 @@ import meshservice.communication.JsonReader;
 import meshservice.communication.RequestException;
 
 import java.io.BufferedInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Base64;
 
 /**
@@ -18,7 +18,12 @@ import java.util.Base64;
  * @author RGeresz
  */
 public class FileService extends Service {
-    public static final String[] REQUEST_REQUIRED_FIELDS=new String[]{"action","ownerID","filename"};
+    public static final String[] REQUEST_REQUIRED_FIELDS=new String[]{"action","ownerID","file","filename"};
+    
+    /**
+     * Root directory where user files are stored.
+     */
+    private File filesRootDirectory;
     
     /**
      * Default constructor that initializes the FileService with a default port.
@@ -35,6 +40,7 @@ public class FileService extends Service {
      */
     public FileService(int port) throws IOException {
         super(port);
+        filesRootDirectory=new File("UserData");
     }
 
     @Override
@@ -59,8 +65,10 @@ public class FileService extends Service {
     public void processRequest(BufferedInputStream request, JsonBuilder response) throws IOException, RequestException {
         final JsonReader reader = new JsonReader(request);
         final String action = reader.readString("action");
-        response.addField("action", action);
-        final Path path = Paths.get(reader.readNumber("ownerID", Long.class) + "/" + reader.readString("filename"));
+        final File userDirectory=new File(filesRootDirectory+"/"+reader.readString("ownerID"));
+        if(!userDirectory.exists())
+            userDirectory.mkdirs();
+        final Path path = userDirectory.toPath().resolve(reader.readString("filename"));
         try {
             switch (action) {
                 // If the action is "getFile", read the file from the specified path and add it to the response.
