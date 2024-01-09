@@ -58,23 +58,15 @@ public class GetPostsService extends Service {
      * @throws RequestException if the request cannot be processed.
      */
     @Override
-    public void processRequest(BufferedInputStream request, JsonBuilder response) throws IOException, RequestException {
+    public void processRequest(BufferedInputStream request, JsonBuilder response) throws IOException, RequestException,SQLException {
         final JsonReader reader = new JsonReader(request);
         final String action = reader.readString("action");
-        response.addField("action", action);
         long ownerID = reader.readNumber("ownerID", Long.class);
-        try {
-            if (action.equals("getPosts")) {
-                // TODO: change the way of serializing lists into JSON
-                response.addArray("posts", dao.getRecentPosts(ownerID))
-                        .setStatus("Posts found",200);
-            } else {
-                throw new RequestException("Unsupported method");
-            }
-        } catch (SQLException e) {
-            response.clear();
-            response.setStatus("An error occurred during processing DB request: "
-                    + e.getMessage(), 500);
-        }
+        if(action.equals("getPosts"))
+            response.addArray("posts",dao.getRecentPosts(ownerID))
+                    .setStatus("Posts found",200);
+        else
+            throw new RequestException("Unsupported method");
+        System.out.println(response.getJson().toPrettyString());
     }
 }

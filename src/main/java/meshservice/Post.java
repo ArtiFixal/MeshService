@@ -1,5 +1,7 @@
 package meshservice;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.sql.Timestamp;
 
 /**
@@ -8,12 +10,21 @@ import java.sql.Timestamp;
  * @author ApolLuck
  */
 public class Post {
+    @JsonProperty("id")
     private final long id;
+    @JsonProperty("ownerID")
     private final long ownerId;
+    @JsonProperty("content")
     public String content;
+    @JsonProperty("created")
     public Timestamp whenCreated;
     
-    public Post(long id,long ownerId,String content,Timestamp whenCreated) {
+    @JsonCreator
+    public Post(@JsonProperty("id") long id,
+            @JsonProperty("ownerID") long ownerId,
+            @JsonProperty("content") String content,
+            @JsonProperty("created") Timestamp whenCreated)
+    {
         this.id = id;
         this.ownerId = ownerId;
         this.content = content;
@@ -38,5 +49,10 @@ public class Post {
 
     public Timestamp getWhenCreated(){
         return whenCreated;
+    }
+
+    @Override
+    public String toString(){
+        return id+" "+ownerId+" "+content+" "+whenCreated;
     }
 }

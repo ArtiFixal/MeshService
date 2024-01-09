@@ -7,6 +7,7 @@ import java.io.InputStreamReader;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Base64;
 
 import meshservice.communication.JsonReader;
@@ -100,6 +101,9 @@ public class CLI {
                     System.out.println("Enter filename:");
                     jsonRequest.addField("filename", reader.readLine());
                 }
+                case "7" -> {
+                    return;
+                }
                 default -> {
                     System.out.println("Invalid option.");
                     continue;
@@ -123,7 +127,10 @@ public class CLI {
                         case "3" -> System.out.println("Post added successfully.");
                         case "4" -> {
                             System.out.println("Posts:");
-                            // TODO: print posts
+                            ArrayList<Post> posts=response.readArrayOf("posts",Post.class);
+                            posts.forEach((post)->{
+                                System.out.println(post);
+                            });
                         }
                         case "5" -> System.out.println("File uploaded successfully.");
                         case "6" -> {
