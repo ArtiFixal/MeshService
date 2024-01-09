@@ -2,7 +2,6 @@ package meshservice.communication;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
@@ -50,40 +49,33 @@ public class JsonBuilder{
         return this;
     }
 
-    public <T> JsonBuilder addField(String field,T value)
+    public JsonBuilder addField(String field,Object value)
     {
-        return addField(field,String.valueOf(value));
+        json.set(field,mapper.convertValue(value,JsonNode.class));
+        return this;
     }
-
+    
     public JsonBuilder addField(String field,String value)
     {
         json.put(field,value);
         return this;
     }
 
-    private <T> JsonBuilder setField(String fieldName,T value)
+    private JsonBuilder setField(String fieldName,Object value)
     {
-        final JsonNode statusNode=mapper.createObjectNode()
-            .put(fieldName,String.valueOf(value));
-        json.set(fieldName,statusNode.get(fieldName));
+        json.set(fieldName,mapper.convertValue(value,JsonNode.class));
         return this;
     }
 
-    public <T> JsonBuilder addArray(String fieldName,T[] array)
+    public JsonBuilder addArray(String fieldName,Object[] array)
     {
-        final ArrayNode arrayNode=json.putArray(fieldName);
-        for(T element:array){
-            arrayNode.add(String.valueOf(element));
-        }
+        json.set(fieldName,mapper.valueToTree(array));
         return this;
     }
 
     public JsonBuilder addArray(String fieldName,Collection coll)
     {
-        final ArrayNode arrayNode=json.putArray(fieldName);
-        coll.forEach((element)->{
-            arrayNode.add(String.valueOf(element));
-        });
+        json.set(fieldName,mapper.valueToTree(coll));
         return this;
     }
 
