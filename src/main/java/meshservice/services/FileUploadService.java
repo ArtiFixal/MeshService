@@ -17,7 +17,7 @@ import java.util.Base64;
  *
  * @author RGeresz
  */
-public class FileService extends Service {
+public class FileUploadService extends Service {
     public static final String[] REQUEST_REQUIRED_FIELDS=new String[]{"action","ownerID","file","filename"};
     
     /**
@@ -29,7 +29,7 @@ public class FileService extends Service {
      * Default constructor that initializes the FileService with a default port.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
-    public FileService() throws IOException {
+    public FileUploadService() throws IOException {
         this(0);
     }
 
@@ -38,7 +38,7 @@ public class FileService extends Service {
      * @param port The port number.
      * @throws IOException if an I/O error occurs when opening the socket.
      */
-    public FileService(int port) throws IOException {
+    public FileUploadService(int port) throws IOException {
         super(port);
         filesRootDirectory=new File("UserData");
     }
@@ -71,12 +71,6 @@ public class FileService extends Service {
         final Path path = userDirectory.toPath().resolve(reader.readString("filename"));
         try {
             switch (action) {
-                // If the action is "getFile", read the file from the specified path and add it to the response.
-                case "getFile" -> {
-                    byte[] file = Files.readAllBytes(path);
-                    response.addField("file", Base64.getEncoder().encodeToString(file));
-                    response.setStatus("File downloaded successfully", 200);
-                }
                 // If the action is "uploadFile", write the file to the specified path.
                 case "uploadFile" -> {
                     byte[] file = Base64.getDecoder().decode(reader.readString("file"));

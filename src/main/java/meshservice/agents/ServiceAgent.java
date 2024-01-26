@@ -9,7 +9,7 @@ import meshservice.communication.JsonBuilder;
 import meshservice.communication.JsonReader;
 import meshservice.communication.RequestException;
 import meshservice.services.AddPostService;
-import meshservice.services.FileService;
+import meshservice.services.FileUploadService;
 import meshservice.services.GetPostsService;
 import meshservice.services.Service;
 import meshservice.services.UserAuthenticationService;
@@ -90,9 +90,9 @@ public class ServiceAgent extends Agent{
             case "getposts" ->
                 new GetPostsService(port);
             case "uploadfile" ->
-                new FileService(port);
+                new FileUploadService(port);
             case "getfile" ->
-                new FileService(port);
+                new FileUploadService(port);
             default ->
                 throw new RequestException("Unknown service name: "+serviceName);
         };
