@@ -50,7 +50,7 @@ public class FileDownloadService extends Service {
     
     @Override
     public String[] getAdditionalResponseFields(){
-        return new String[]{"file"};
+        return new String[]{"file", "filename"};
     }
 
     /**
@@ -77,6 +77,7 @@ public class FileDownloadService extends Service {
                 case "getFile" -> {
                     byte[] file = Files.readAllBytes(path);
                     response.addField("file", Base64.getEncoder().encodeToString(file));
+                    response.addField("filename", path.getFileName().toString());
                     response.setStatus("File downloaded successfully", 200);
                 }
                 // If the action is not supported, throw a RequestException.
@@ -86,4 +87,5 @@ public class FileDownloadService extends Service {
             response.setStatus("An error occurred during processing file request: " + e.getMessage(), 500);
         }
     }
+
 }
