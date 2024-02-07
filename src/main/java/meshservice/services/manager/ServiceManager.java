@@ -347,8 +347,8 @@ public class ServiceManager extends Service{
             while(isAlive)
             {
                 try{
-                    sleep(SLEEP_FOR);
                     long start=System.currentTimeMillis();
+                    sleep(SLEEP_FOR);
                     processInactivityTimers(SLEEP_FOR);
                     long stop=System.currentTimeMillis();
                     toSecond+=stop-start;

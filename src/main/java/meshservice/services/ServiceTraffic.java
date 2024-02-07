@@ -33,7 +33,8 @@ public class ServiceTraffic{
     public ServiceTraffic(float invokeRatio,ServiceInvoke invokeCallback){
         this.invokeRatio=invokeRatio;
         this.invokeCallback=invokeCallback;
-        currentRPS=2;
+        previousRPS=1;
+        currentRPS=1;
     }
 
     public long getCurrentRPS(){
