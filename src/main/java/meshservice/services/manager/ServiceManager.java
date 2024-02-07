@@ -4,6 +4,7 @@ import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import meshservice.AgentServicesInfo;
 import meshservice.ServiceStatus;
 import meshservice.communication.AgentHostport;
@@ -30,7 +31,7 @@ public class ServiceManager extends Service{
     /**
      * Max service inactivity time in miliseconds.
      */
-    private static final long MAX_INACTIVITY=120000;
+    private static final long MAX_INACTIVITY=2000;
     
     /**
      * Request per second ratio over/at which new service instance will be created.
@@ -87,34 +88,34 @@ public class ServiceManager extends Service{
      */
     public void processInactivityTimers(long value)
     {
-        synchronized(agentContainer.getRunningAgents()){
-            agentContainer.getRunningAgents().forEach((agentName,agent)->{
-                // Iterate over
-                agent.getRunningServices().forEach((serviceType,serviceArray)->{
-                    serviceArray.forEach((serviceUUID,service)->{
-                        if(service.getStatus().equals(ServiceStatus.RUNNING)){
-                            service.increaseInactiveTimer(value);
-                        }else if(service.getStatus().equals(ServiceStatus.CLOSED)){
-                            agentContainer.removeService(agentName,serviceType,serviceUUID);
+        agentContainer.getRunningAgents().forEach((agentName,agent)->{
+            // Iterate over
+            agent.getRunningServices().forEach((serviceType,serviceArray)->{
+                serviceArray.forEach((serviceUUID,service)->{
+                    if(service.getStatus().equals(ServiceStatus.RUNNING)){
+                        service.increaseInactiveTimer(value);
+                    }else if(service.getStatus().equals(ServiceStatus.CLOSED)){
+                        agentContainer.removeService(agentName,serviceType,serviceUUID);
+                    }
+                    if(service.getInactiveTimer()>=MAX_INACTIVITY){
+                        final JsonBuilder closeRequest=new JsonBuilder("closeService")
+                                .addField("type","request")
+                                .addField("serviceID",serviceUUID)
+                                .addField("service",serviceType);
+                        try{
+                            communicateWithServiceAgent(agentName,closeRequest);
+                            loadBalancer.removeServiceDestination(agentName,serviceType,service);
+                            // Lower timer to avoid duplicated close requests
+                            service.setInactiveTimer((service.getInactiveTimer()*TimerThread.SLEEP_FOR*4));
+                        }catch(Exception e){
+                            System.out.println(e);
+                            e.printStackTrace();
                         }
-                        if(service.getInactiveTimer()>=MAX_INACTIVITY){
-                            final JsonBuilder closeRequest=new JsonBuilder("closeService")
-                                    .addField("type","request")
-                                    .addField("serviceID",serviceUUID)
-                                    .addField("service",serviceType);
-                            try{
-                                communicateWithServiceAgent(agentName,closeRequest);
-                                loadBalancer.removeServiceDestination(agentName,serviceType,service);
-                            }catch(Exception e){
-                                System.out.println(e);
-                                e.printStackTrace();
-                            }
-                            System.out.println("[Info]: Closed service: "+serviceType);
-                        }
-                    });
+                        System.out.println("[Info]: Closed service: "+serviceType);
+                    }
                 });
             });
-        }
+        });
     }
 
     /**
@@ -287,7 +288,7 @@ public class ServiceManager extends Service{
      */
     private void processServiceAsk(String serviceType,JsonBuilder response) throws RequestException,IOException
     {
-        synchronized(agentContainer){
+        synchronized(loadBalancer){
             if(serviceTypeTraffic.containsKey(serviceType))
                 serviceTypeTraffic.get(serviceType).increaseCurrentRPS();
             else
@@ -383,13 +384,13 @@ public class ServiceManager extends Service{
          * Key - agent name <br>
          * Value - agent info
          */
-        private final HashMap<String,AgentServicesInfo> runningAgents;
+        private final ConcurrentHashMap<String,AgentServicesInfo> runningAgents;
 
         public RunningAgentsContainer(){
-            this.runningAgents=new HashMap<>();
+            this.runningAgents=new ConcurrentHashMap<>();
         }
 
-        public HashMap<String,AgentServicesInfo> getRunningAgents(){
+        public ConcurrentHashMap<String,AgentServicesInfo> getRunningAgents(){
             return runningAgents;
         }
         
@@ -398,7 +399,7 @@ public class ServiceManager extends Service{
          * 
          * @return Given agent info.
          */
-        public synchronized AgentServicesInfo getAgentInfo(String agentName)
+        public AgentServicesInfo getAgentInfo(String agentName)
         {
             return runningAgents.get(agentName);
         }
@@ -409,7 +410,7 @@ public class ServiceManager extends Service{
          * @param agentName From where to remove.
          * @param serviceUUID What to remove
          */
-        public synchronized void removeService(String agentName,
+        public void removeService(String agentName,
             String serviceType,String serviceUUID)
         {
             runningAgents.get(agentName).getRunningServices()
@@ -422,9 +423,11 @@ public class ServiceManager extends Service{
          * @param agentName New agent name.
          * @param agent New agent data.
          */
-        public synchronized void registerAgent(String agentName,AgentServicesInfo agent){
+        public void registerAgent(String agentName,AgentServicesInfo agent){
             runningAgents.put(agentName,agent);
-            loadBalancer.addNewAgentDestination(agentName,agent);
+            synchronized(loadBalancer){
+                loadBalancer.addNewAgentDestination(agentName,agent);
+            }
         }
         
         /**
@@ -438,8 +441,8 @@ public class ServiceManager extends Service{
         public void registerService(String agentName,String serviceUUID,String serviceType,int servicePort,String[] requiredRequestFields,String[] additionalFields)
         {
             ServiceData newService=new ServiceData(serviceType,servicePort,ServiceStatus.RUNNING,requiredRequestFields,additionalFields);
-            synchronized(runningAgents){
-                runningAgents.get(agentName).addNewService(serviceType,serviceUUID,newService);
+            runningAgents.get(agentName).addNewService(serviceType,serviceUUID,newService);
+            synchronized(loadBalancer){
                 loadBalancer.addNewServiceDestination(agentName,serviceType,newService);
             }
             System.out.println("[Info]: New service registered: "+serviceType+" in agent: "+agentName);
@@ -453,7 +456,7 @@ public class ServiceManager extends Service{
          * @param serviceUUID Which service it is.
          * @param newStatus To what update.
          */
-        public synchronized void changeServiceStatus(String agentName,
+        public void changeServiceStatus(String agentName,
             String serviceType,String serviceUUID,ServiceStatus newStatus)
         {
             if(runningAgents.get(agentName).getRunningServices()
@@ -473,7 +476,7 @@ public class ServiceManager extends Service{
          * @param serviceType What type it is.
          * @param serviceUUID Which service it is.
          */
-        public synchronized void renewServiceTimer(String agentName,
+        public void renewServiceTimer(String agentName,
             String serviceType,String serviceUUID)
         {
             runningAgents.get(agentName).getRunningServices()

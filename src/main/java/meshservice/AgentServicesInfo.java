@@ -1,8 +1,8 @@
 package meshservice;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import meshservice.services.ServiceData;
 
 /**
@@ -25,7 +25,7 @@ public class AgentServicesInfo{
     /**
      * Already running services.
      */
-    HashMap<String,HashMap<String,ServiceData>> runningServices;
+    ConcurrentHashMap<String,ConcurrentHashMap<String,ServiceData>> runningServices;
     
     /**
      * Agent host.
@@ -42,7 +42,7 @@ public class AgentServicesInfo{
         this.host=host;
         this.port=port;
         this.availableServices=availableServices;
-        runningServices=new HashMap<>();
+        runningServices=new ConcurrentHashMap<>();
     }
 
     public UUID getAgentID(){
@@ -68,7 +68,7 @@ public class AgentServicesInfo{
     {
         if(!runningServices.containsKey(serviceType))
         {
-            HashMap<String,ServiceData> services=new HashMap(4);
+            ConcurrentHashMap<String,ServiceData> services=new ConcurrentHashMap(4);
             services.put(serviceUUID,serviceData);
             runningServices.put(serviceType,services);
         }
@@ -76,7 +76,7 @@ public class AgentServicesInfo{
             runningServices.get(serviceType).put(serviceUUID,serviceData);
     }
 
-    public HashMap<String,HashMap<String,ServiceData>> getRunningServices(){
+    public ConcurrentHashMap<String,ConcurrentHashMap<String,ServiceData>> getRunningServices(){
         return runningServices;
     }
 

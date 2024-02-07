@@ -2,6 +2,7 @@ package meshservice.loadbalancer;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import meshservice.AgentServicesInfo;
 import meshservice.communication.AgentHostport;
 import meshservice.communication.ServiceHostport;
@@ -25,7 +26,7 @@ public class RoundRobinBalancer implements LoadBalancer{
      */
     private HashMap<String,ServiceBalancerInfo> balanceInfo;
 
-    public RoundRobinBalancer(HashMap<String,AgentServicesInfo> runningAgents){
+    public RoundRobinBalancer(ConcurrentHashMap<String,AgentServicesInfo> runningAgents){
         balanceInfo=new HashMap<>();
         ArrayList<String> agentData=new ArrayList<>();
         agentIterator=new AgentIterator(agentData);
