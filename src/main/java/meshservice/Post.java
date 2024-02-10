@@ -53,6 +53,7 @@ public class Post {
 
     @Override
     public String toString(){
-        return id+" "+ownerId+" "+content+" "+whenCreated;
+        return "Post ID: " + id+ "\n" + "Owner ID: " + ownerId + "\n" + "Content: " + content
+                +"\n" + "Create time: " + whenCreated + "\n";
     }
 }
