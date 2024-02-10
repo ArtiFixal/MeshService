@@ -106,7 +106,7 @@ public class ServiceManager extends Service{
                             communicateWithServiceAgent(agentName,closeRequest);
                             loadBalancer.removeServiceDestination(agentName,serviceType,service);
                             // Lower timer to avoid duplicated close requests
-                            service.setInactiveTimer((service.getInactiveTimer()*TimerThread.SLEEP_FOR*4));
+                            service.setInactiveTimer((service.getInactiveTimer()-TimerThread.SLEEP_FOR*4));
                         }catch(Exception e){
                             System.out.println(e);
                             e.printStackTrace();
