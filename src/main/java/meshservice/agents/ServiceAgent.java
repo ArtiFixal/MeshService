@@ -2,9 +2,11 @@ package meshservice.agents;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.net.Socket;
 import java.sql.SQLException;
 import java.util.UUID;
 import meshservice.ServiceStatus;
+import meshservice.communication.Connection;
 import meshservice.communication.JsonBuilder;
 import meshservice.communication.JsonReader;
 import meshservice.communication.RequestException;
@@ -38,10 +40,9 @@ public class ServiceAgent extends Agent{
         final JsonReader reader=new JsonReader(request);
         System.out.println("Service agent request: "+reader.getRequestNode().toPrettyString());
         String action=reader.readString("action").toLowerCase();
-        String serviceType=reader.readString("service").toLowerCase();
         switch(action){
-            // Manager request to run given service
             case "run" -> {
+                String serviceType=reader.readString("service").toLowerCase();
                 int port=reader.readNumberPositive("port",Integer.class);
                 Service serv=runService(serviceType,port);
                 System.out.println("[Info]: Agent started service: "+serviceType);
@@ -53,26 +54,42 @@ public class ServiceAgent extends Agent{
                             .addArray("requiredFields",serv.getRequiredRequestFields())
                             .addArray("additionalFields",serv.getAdditionalResponseFields());
                 }
+                response.addField("service",serviceType);
             }
             case "closeservice" -> {
+                String serviceType=reader.readString("service").toLowerCase();
+                UUID serviceUUID=UUID.fromString(reader.readString("serviceID"));
+                try(Connection updateRequest=new Connection(new Socket(config.getManagerHost(),config.getManagerPort()))){
+                    synchronized(runningServices){
+                        Service serv=runningServices.get(serviceUUID);
+                        updateServiceStatusAtManager(updateRequest,serviceUUID,serviceType,ServiceStatus.CLOSING);
+                        serv.closeService();
+                        updateServiceStatusAtManager(updateRequest,serviceUUID,serviceType,ServiceStatus.CLOSED);
+                        runningServices.remove(serviceUUID);
+                    }
+                }
+                response.addField("service",serviceType);
+            }
+            case "testserviceconnection" -> {
                 UUID serviceUUID=UUID.fromString(reader.readString("serviceID"));
                 synchronized(runningServices){
-                    Service serv=runningServices.get(serviceUUID);
-                    updateServiceStatusAtManager(serviceUUID,serviceType,ServiceStatus.CLOSING);
-                    serv.closeService();
-                    updateServiceStatusAtManager(serviceUUID,serviceType,ServiceStatus.CLOSED);
-                    runningServices.remove(serviceUUID);
+                    testServiceConnection(serviceUUID);
                 }
+            }
+            case "testconnection" -> {}
+            case "reconectservice" -> {
+                UUID serviceUUID=UUID.fromString(reader.readString("serviceID"));
+                reconectService(serviceUUID);
             }
             default ->
                 throw new RequestException("Unknown request action.");
         }
+        // Manager request to run given service
         // Setting response fields
-        response.addField("service",serviceType);
         response.addField("type","response");
         response.setStatus(200);
     }
-
+    
     @Override
     protected Service startService(String serviceName,int port) throws IOException,RequestException,SQLException{
         return switch(serviceName){
@@ -98,6 +115,29 @@ public class ServiceAgent extends Agent{
         final String[] services=new String[]{"login","register","addpost",
             "getposts","uploadfile","getfile"};
         return services;
+    }
+    
+    /**
+     * Updates given service status at the manager.
+     * 
+     * @param connection Connection to the manager.
+     * @param serviceID UUID of service to change status.
+     * @param serviceType What the service does.
+     * @param status New status.
+     * 
+     * @throws IOException If any socket error occurred.
+     * @throws RequestException If request was malformed.
+     */
+    public void updateServiceStatusAtManager(Connection connection,UUID serviceID,String serviceType,
+            ServiceStatus status) throws IOException,RequestException
+    {
+        final JsonBuilder request=new JsonBuilder("serviceStatusChange")
+                .addField("type","request")
+                .addField("agent",config.getAgentName())
+                .addField("serviceID",serviceID)
+                .addField("service",serviceType)
+                .addField("newStatus",status.getStatusCode());
+        connection.sendRequest(request);
     }
     
     public static void main(String[] args){

@@ -2,6 +2,8 @@ package meshservice.services;
 
 import java.io.IOException;
 import java.net.Socket;
+import meshservice.communication.Connection;
+import meshservice.communication.ConnectionThread;
 
 /**
  * Base class for the multithreaded services.
@@ -19,27 +21,9 @@ public abstract class MultithreadService extends Service{
     }
 
     @Override
-    protected void processSocket(Socket clientSocket){
-        // Autoclose socket
-        try(clientSocket){
-            super.processSocket(clientSocket);
-        }catch(Exception e){
-            System.out.println(e);
-            e.printStackTrace();
-        }
-    }
-
-    @Override
-    public void run(){
-        while(isAlive){
-            try{
-                Socket clientSocket=prepareSocket();
-                Thread t=new Thread(()->processSocket(clientSocket));
-                t.start();
-            }catch(IOException e){
-                System.out.println(e);
-            }
-            sleepFor(50);
-        }
+    public void processSocket(Socket clientSocket) throws IOException{
+        Connection clientConnection=new Connection(clientSocket);
+        ConnectionThread processThread=new ConnectionThread(clientConnection,this);
+        processThread.start();
     }
 }

@@ -1,21 +1,25 @@
 package meshservice.services.manager;
 
 import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.HashMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import meshservice.AgentServicesInfo;
 import meshservice.ServiceStatus;
 import meshservice.communication.AgentHostport;
-import meshservice.communication.Hostport;
+import meshservice.communication.Connection;
+import meshservice.communication.ConnectionThread;
 import meshservice.communication.JsonBuilder;
 import meshservice.communication.JsonReader;
 import meshservice.communication.RequestException;
 import meshservice.communication.ServiceHostport;
 import meshservice.loadbalancer.LoadBalancer;
 import meshservice.loadbalancer.RoundRobinBalancer;
-import meshservice.services.Service;
+import meshservice.services.ControlPlaneService;
 import meshservice.services.ServiceData;
 import meshservice.services.ServiceInvoke;
 import meshservice.services.ServiceTraffic;
@@ -25,13 +29,13 @@ import meshservice.services.ServiceTraffic;
  *
  * @author ArtiFixal
  */
-public class ServiceManager extends Service{
+public class ServiceManager extends ControlPlaneService{
     public static final String[] REQUEST_REQUIRED_FIELDS=new String[]{"action","agentName"};
 
     /**
      * Max service inactivity time in miliseconds.
      */
-    private static final long MAX_INACTIVITY=2000;
+    private static final long MAX_INACTIVITY=120000;
     
     /**
      * Request per second ratio over/at which new service instance will be created.
@@ -54,9 +58,9 @@ public class ServiceManager extends Service{
     private LoadBalancer loadBalancer;
     
     /**
-     * Current processed client socket.
+     * Stores service mesh active connections.
      */
-    private Socket currentClient;
+    private ActiveConnectionContainer activeConnections;
     
     /**
      * Thread managing services lifespan.
@@ -70,15 +74,10 @@ public class ServiceManager extends Service{
     public ServiceManager(int port) throws IOException{
         super(port);
         agentContainer=new RunningAgentsContainer();
+        activeConnections=new ActiveConnectionContainer();
         loadBalancer=new RoundRobinBalancer(agentContainer.getRunningAgents());
         serviceTypeTraffic=new HashMap<>();
         timerThread=new TimerThread();
-    }
-
-    @Override
-    protected Socket prepareSocket() throws IOException{
-        currentClient=super.prepareSocket();
-        return currentClient;
     }
 
     /**
@@ -94,24 +93,27 @@ public class ServiceManager extends Service{
                 serviceArray.forEach((serviceUUID,service)->{
                     if(service.getStatus().equals(ServiceStatus.RUNNING)){
                         service.increaseInactiveTimer(value);
+                        if(service.getInactiveTimer()>=MAX_INACTIVITY){
+                            final JsonBuilder closeRequest=new JsonBuilder("closeService")
+                                    .addField("type","request")
+                                    .addField("serviceID",serviceUUID)
+                                    .addField("service",serviceType);
+                            try{
+                                // Lower timer to avoid duplicated close requests
+                                service.setInactiveTimer((service.getInactiveTimer()-TimerThread.SLEEP_FOR*4));
+                                communicateWithServiceAgent(getOrConnect(agentName),closeRequest);
+                                synchronized(loadBalancer){
+                                    loadBalancer.removeServiceDestination(agentName,serviceType,service);
+                                }
+                                
+                            }catch(Exception e){
+                                System.out.println(e);
+                                e.printStackTrace();
+                            }
+                            System.out.println("[Info]: Closed service: "+serviceType);
+                        }
                     }else if(service.getStatus().equals(ServiceStatus.CLOSED)){
                         agentContainer.removeService(agentName,serviceType,serviceUUID);
-                    }
-                    if(service.getInactiveTimer()>=MAX_INACTIVITY){
-                        final JsonBuilder closeRequest=new JsonBuilder("closeService")
-                                .addField("type","request")
-                                .addField("serviceID",serviceUUID)
-                                .addField("service",serviceType);
-                        try{
-                            communicateWithServiceAgent(agentName,closeRequest);
-                            loadBalancer.removeServiceDestination(agentName,serviceType,service);
-                            // Lower timer to avoid duplicated close requests
-                            service.setInactiveTimer((service.getInactiveTimer()-TimerThread.SLEEP_FOR*4));
-                        }catch(Exception e){
-                            System.out.println(e);
-                            e.printStackTrace();
-                        }
-                        System.out.println("[Info]: Closed service: "+serviceType);
                     }
                 });
             });
@@ -138,29 +140,13 @@ public class ServiceManager extends Service{
 
     @Override
     public void processRequest(BufferedInputStream request,JsonBuilder response)
-            throws IOException,RequestException{
+            throws IOException,RequestException
+    {
         final JsonReader reader=new JsonReader(request);
         System.out.println("Manager request: "+reader.getRequestNode().toPrettyString());
         String action=reader.readString("action").toLowerCase();
         String agentName=reader.readString("agent");
         switch(action){
-            case "registeragent" -> {
-                String agentUUID=reader.readString("serviceID");
-                AgentServicesInfo agent=new AgentServicesInfo(agentUUID,
-                        currentClient.getInetAddress().getHostName(),
-                        reader.readNumberPositive("port",Integer.class),
-                        reader.readArrayOf("availableServices"));
-                agentContainer.registerAgent(agentName,agent);
-                System.out.println("[Info]: New agent registered: "+agentName);
-            }
-            case "servicestatuschange" -> {
-                String serviceUUID=reader.readString("serviceID");
-                String serviceType=reader.readString("service").toLowerCase();
-                int newStatusCode=reader.readNumber("newStatus",Integer.class);
-                ServiceStatus newStatus=ServiceStatus.interperFromNumber(newStatusCode);
-                agentContainer.changeServiceStatus(agentName,serviceType,
-                        serviceUUID,newStatus);
-            }
             case "renewtimer" -> {
                 String serviceUUID=reader.readString("serviceID");
                 String serviceType=reader.readString("service").toLowerCase();
@@ -180,7 +166,7 @@ public class ServiceManager extends Service{
     /**
      * Sends request to the given service agent.
      * 
-     * @param agentName Where to send request.
+     * @param agentConnection Where to send request.
      * @param request What to send.
      * 
      * @return Service agent response.
@@ -188,10 +174,9 @@ public class ServiceManager extends Service{
      * @throws IOException If any socket error occures.
      * @throws RequestException If request was malformed.
      */
-    protected JsonReader communicateWithServiceAgent(String agentName,JsonBuilder request) throws IOException,RequestException
+    protected JsonReader communicateWithServiceAgent(ConnectionThread agentConnection,JsonBuilder request) throws IOException,RequestException
     {
-        AgentServicesInfo agentInfo=agentContainer.getAgentInfo(agentName);
-        return communicateWithHost(agentInfo.getHost(),agentInfo.getPort(),request);
+        return agentConnection.sendRequest(request);
     }
     
     private JsonBuilder createServiceStartRequest(String serviceType){
@@ -215,7 +200,9 @@ public class ServiceManager extends Service{
     protected JsonReader sendServiceStartRequest(String agentName,String serviceType) throws IOException,RequestException
     {
         final JsonBuilder request=createServiceStartRequest(serviceType);
-        return communicateWithServiceAgent(agentName,request);
+        AgentServicesInfo agentInfo=agentContainer.getAgentInfo(agentName);
+        ConnectionThread agentConnection=getOrConnect(agentName,agentInfo.getHost(),agentInfo.getPort());
+        return communicateWithServiceAgent(agentConnection,request);
     }
     
     /**
@@ -229,10 +216,55 @@ public class ServiceManager extends Service{
      * @throws IOException If any socket error occures.
      * @throws RequestException If request was malformed.
      */
-    protected JsonReader sendServiceStartRequest(Hostport agentDestination,String serviceType) throws IOException,RequestException
+    protected JsonReader sendServiceStartRequest(AgentHostport agentDestination,String serviceType) throws IOException,RequestException
     {
         final JsonBuilder request=createServiceStartRequest(serviceType);
-        return communicateWithHost(agentDestination.getHost(),agentDestination.getPort(),request);
+        System.out.println("Manager request sent to ServiceAgent:"+request.getJson().toPrettyString());
+        return communicateWithServiceAgent(
+                getOrConnect(agentDestination.getAgentName(),
+                agentDestination.getHost(),
+                agentDestination.getPort()),request);
+    }
+    
+    /**
+     * Gets existing agent connection or reconects to it.
+     * 
+     * @param agentName Which to look for.
+     * 
+     * @return Connection thread to the given agent.
+     * 
+     * @throws IOException Any socket error occurred.
+     * @throws RequestException If request was malformed.
+     */
+    private ConnectionThread getOrConnect(String agentName) throws IOException, RequestException{
+        AgentServicesInfo agentInfo=agentContainer.getAgentInfo(agentName);
+        return getOrConnect(agentName,agentInfo.getHost(),agentInfo.getPort());
+    }
+    
+    /**
+     * Gets existing agent connection or reconects to it.
+     * 
+     * @param agentName Which to look for.
+     * @param host To which host connect if there is no connection.
+     * @param port To which port connect if there is no connection.
+     * 
+     * @return Connection thread to the given agent.
+     * 
+     * @throws IOException Any socket error occurred.
+     * @throws RequestException If request was malformed.
+     */
+    private ConnectionThread getOrConnect(String agentName,String host,int port) throws IOException, RequestException{
+        ConnectionThread agentThread;
+        if(activeConnections.getControlPlaneConnections().containsKey(agentName)){
+            System.out.println("[Info]: Reused active connection to: "+agentName);
+            agentThread=activeConnections.getControlPlaneConnection(agentName);
+        }
+        else
+        {
+            agentThread=reconectToAgent(agentName,host,port);
+            System.out.println("[Info]: Created new connection to: "+agentName);
+        }
+        return agentThread;
     }
     
     /**
@@ -322,6 +354,50 @@ public class ServiceManager extends Service{
                 .addArray("requiredFields",askedFor.getRequestRequiredFields())
                 .addArray("additionalFields",askedFor.getAdditionalResponseFields());
     }
+    
+    
+    /**
+     * Reconects to the given agent.
+     * 
+     * @param agentName Agent to which reconect.
+     * 
+     * @throws IOException Any socket error occurred.
+     * @throws RequestException If request was malformed.
+     */
+    private ConnectionThread reconectToAgent(String agentName) throws IOException, RequestException{
+        final JsonBuilder reconectRequest=new JsonBuilder("renewmanagerconnection")
+                .addField("type","request");
+        ConnectionThread oldAgentThread=activeConnections.getControlPlaneConnection(agentName);
+        oldAgentThread.close();
+        AgentServicesInfo agentInfo=agentContainer.getAgentInfo(agentName);
+        ConnectionThread newAgentThread=new ConnectionThread(new Connection(
+                new Socket(agentInfo.getHost(),agentInfo.getPort())),this);
+        newAgentThread.sendRequest(reconectRequest);
+        newAgentThread.start();
+        activeConnections.replaceControlPlaneConnection(agentName,newAgentThread);
+        return newAgentThread;
+    }
+    
+    /**
+     * Reconects to the given agent.
+     * 
+     * @param agentName Agent to which reconect.
+     * 
+     * @throws IOException Any socket error occurred.
+     * @throws RequestException If request was malformed.
+     */
+    private ConnectionThread reconectToAgent(String agentName,String host,int port) throws IOException, RequestException{
+        final JsonBuilder reconectRequest=new JsonBuilder("renewmanagerconnection")
+                .addField("type","request");
+        ConnectionThread oldAgentThread=activeConnections.getControlPlaneConnection(agentName);
+        oldAgentThread.close();
+        ConnectionThread newAgentThread=new ConnectionThread(new Connection(
+                new Socket(host,port)),this);
+        newAgentThread.sendRequest(reconectRequest);
+        newAgentThread.start();
+        activeConnections.replaceControlPlaneConnection(agentName,newAgentThread);
+        return newAgentThread;
+    }
 
     @Override
     public void closeService() throws IOException{
@@ -337,7 +413,8 @@ public class ServiceManager extends Service{
         private static final int SLEEP_FOR=100;
         private boolean isAlive;
         private int toSecond;
-        
+        private int secondsPassed;
+                
         public TimerThread(){
             isAlive=true;
             start();
@@ -363,6 +440,29 @@ public class ServiceManager extends Service{
                             }
                         });
                         toSecond=0;
+                        secondsPassed++;
+                    }
+                    if(secondsPassed>=20)
+                    {
+                        activeConnections.getControlPlaneConnections().forEach(((agentName,agentConnectionThred)->{
+                            if(!activeConnections.testAgentConnection(agentName))
+                            {
+                                try{
+                                    reconectToAgent(agentName);
+                                }catch(Exception e){
+                                    System.out.println("[Error]: Manager failed to reconecto to the agent: "+agentName);
+                                }
+                            }
+                        }));
+                        activeConnections.getDataPlaneConnections().forEach((serviceID,connectionInfo)->{
+                            try{
+                                if(!activeConnections.testServiceConnection(serviceID))
+                                    activeConnections.requestAgentToReconectService(serviceID);
+                            }catch(Exception e){
+                                System.out.println("[Error]: Manager failed to make agent reconect its service: "+serviceID);
+                            }
+                        });
+                        secondsPassed=0;
                     }
                 }catch(Exception e){
                     System.out.println(e);
@@ -445,7 +545,7 @@ public class ServiceManager extends Service{
             synchronized(loadBalancer){
                 loadBalancer.addNewServiceDestination(agentName,serviceType,newService);
             }
-            System.out.println("[Info]: New service registered: "+serviceType+" in agent: "+agentName);
+            System.out.printf("[Info]: Registered new service: %s (%s) in agent: %s\n",serviceUUID,serviceType,agentName);
         }
         
         /**
@@ -484,7 +584,228 @@ public class ServiceManager extends Service{
         }
         
     }
+    
+    private class ConnectionInfo{
+        /**
+         * Name of agent which owns this service.
+         */
+        String agentName;
+        
+        /**
+         * Info about this service.
+         */
+        ServiceData serviceInfo;
+        
+        /**
+         * Connection state of this service with its agent.
+         */
+        private boolean works;
 
+        public ConnectionInfo(String agent,ServiceData serviceInfo){
+            this.agentName=agent;
+            this.serviceInfo=serviceInfo;
+            works=true;
+        }
+        
+        public String getAgentName(){
+            return agentName;
+        }
+        
+        public String getHost(){
+            return agentContainer.getAgentInfo(agentName).getHost();
+        }
+        
+        public int getPort(){
+            return serviceInfo.getPort();
+        }
+
+        public boolean isWorking(){
+            return works;
+        }
+    }
+    
+    private class ActiveConnectionContainer{
+        /**
+         * Timeout after which it is assumed connection is not valid.
+         */
+        public static final int DEFAULT_TIMEOUT=500;
+        
+        /**
+         * Stores connections to the control plane services.
+         */
+        private final ConcurrentHashMap<String,ConnectionThread> controlPlaneConnections;
+        
+        /**
+         * Stores connections to the data plane services.
+         */
+        private final ConcurrentHashMap<String,ConnectionInfo> dataPlaneConnections;
+
+        public ActiveConnectionContainer(){
+            controlPlaneConnections=new ConcurrentHashMap<>();
+            dataPlaneConnections=new ConcurrentHashMap<>();
+        }
+
+        public ConcurrentHashMap<String,ConnectionThread> getControlPlaneConnections(){
+            return controlPlaneConnections;
+        }
+
+        public ConcurrentHashMap<String,ConnectionInfo> getDataPlaneConnections(){
+            return dataPlaneConnections;
+        }
+        
+        public ConnectionThread getControlPlaneConnection(String agentName){
+            return controlPlaneConnections.get(agentName);
+        }
+        
+        public ConnectionThread getDataPlaneConnection(String agentName){
+            return controlPlaneConnections.get(agentName);
+        }
+        
+        public void addControlPlaneConnection(String agentName,ConnectionThread agentConnection){
+            controlPlaneConnections.put(agentName,agentConnection);
+        }
+        
+        public void addDataPlaneConnection(String serviceID,ConnectionInfo serviceConnectionInfo){
+            dataPlaneConnections.put(serviceID,serviceConnectionInfo);
+        }
+        
+        public void removeControlPlaneConnection(String agentName){
+            controlPlaneConnections.remove(agentName);
+        }
+        
+        public void removeDataPlaneConnection(String serviceID){
+            dataPlaneConnections.remove(serviceID);
+        }
+        
+        public void replaceControlPlaneConnection(String agentName,ConnectionThread newAgentConnection){
+            controlPlaneConnections.replace(agentName,newAgentConnection);
+        }
+        
+        private JsonBuilder createTestRequest(String ServiceID,boolean isAgent){
+            JsonBuilder testRequest=new JsonBuilder()
+                    .addField("serviceID",ServiceID)
+                    .addField("timeout",DEFAULT_TIMEOUT)
+                    .addField("type","request");
+            if(isAgent)
+                testRequest.addField("action","testConnection");
+            else
+                testRequest.addField("action","testServiceConnection");
+            return testRequest;
+        }
+        
+        /**
+         * Tests connection to given data plane service.
+         * 
+         * @param serviceID What to test.
+         * 
+         * @return True if connection works, false otherwise.
+         * 
+         * @throws IOException Any socket error occurred.
+         * @throws RequestException If request was malformed.
+         */
+        public boolean testServiceConnection(String serviceID) throws IOException, RequestException{
+            ConnectionInfo serviceConnectionInfo=dataPlaneConnections.get(serviceID);
+            JsonReader response=controlPlaneConnections.get(serviceConnectionInfo.getAgentName())
+                    .sendRequest(createTestRequest(serviceID,false));
+            return response.readNumberPositive("status",Integer.class)==200;
+        }
+        
+        /**
+         * Tests connection to given agent.
+         * 
+         * @param agentName What to test.
+         * 
+         * @return True if connection works, false otherwise.
+         */
+        public boolean testAgentConnection(String agentName){
+            ConnectionThread agentConnection=controlPlaneConnections.get(agentName);
+            // Complete before DEFAULT_TIMEOUT or error occurred
+            CompletableFuture<Integer> test=CompletableFuture.supplyAsync(()->{
+                int status;
+                try{
+                    JsonReader response=agentConnection.sendRequest(createTestRequest(agentContainer.getAgentInfo(agentName).getAgentID().toString(),true));
+                    status=response.readNumberPositive("status",Integer.class);
+                }catch(Exception e){
+                    status=-2;
+                }
+                return status;
+            });
+            int status;
+            try{
+                status=test.get(DEFAULT_TIMEOUT,TimeUnit.MILLISECONDS);
+            }catch(Exception e){
+                status=-1;
+            }
+            return status==200;
+        }
+        
+        /**
+         * Requests given service agent to reconect with it.
+         * 
+         * @param serviceID With what to reconect.
+         * 
+         * @throws IOException Any socket error occurred.
+         * @throws RequestException If request was malformed.
+         */
+        public void requestAgentToReconectService(String serviceID) throws IOException, RequestException{
+            String agentName=dataPlaneConnections.get(serviceID).getAgentName();
+            final JsonBuilder reconectRequest=new JsonBuilder("reconectService")
+                    .addField("serviceID",serviceID)
+                    .addField("type","request");
+            ConnectionThread agentThread=activeConnections.getControlPlaneConnection(agentName);
+            agentThread.sendRequest(reconectRequest);
+        }
+    }
+    
+    @Override
+    protected void processFirstConnection(Socket clientSocket) throws IOException{
+        BufferedInputStream requestStream=new BufferedInputStream(clientSocket.getInputStream());
+        BufferedOutputStream responseStream=new BufferedOutputStream(clientSocket.getOutputStream());
+        final JsonBuilder response=new JsonBuilder();
+        try{
+            JsonReader request=new JsonReader(requestStream);
+            String action=request.readString("action").toLowerCase();
+            String agentName=request.readString("agent");
+            String serviceUUID=request.readString("serviceID");
+            switch(action){
+                case "registeragent" -> {
+                    AgentServicesInfo agent=new AgentServicesInfo(serviceUUID,
+                            clientSocket.getInetAddress().getHostName(),
+                            request.readNumberPositive("port",Integer.class),
+                            request.readArrayOf("availableServices"));
+                    agentContainer.registerAgent(agentName,agent);
+                    System.out.println("[Info]: New agent registered: "+agentName);
+                    ConnectionThread agentThread=new ConnectionThread(new Connection(clientSocket),this);
+                    activeConnections.addControlPlaneConnection(agentName,agentThread);
+                    agentThread.start();
+                }
+                case "servicestatuschange" -> {
+                    String serviceType=request.readString("service").toLowerCase();
+                    int newStatusCode=request.readNumber("newStatus",Integer.class);
+                    ServiceStatus newStatus=ServiceStatus.interperFromNumber(newStatusCode);
+                    agentContainer.changeServiceStatus(agentName,serviceType,
+                            serviceUUID,newStatus);
+                }
+                case "registerserviceconnection"->{
+                    String serviceType=request.readString("service").toLowerCase();
+                    ServiceData data=agentContainer.getAgentInfo(agentName)
+                            .getRunningServices().get(serviceType).get(serviceUUID);
+                    if(data==null)
+                        throw new RequestException("There is no registerd service with ID: "+serviceUUID);
+                    ConnectionInfo serviceConnectionInfo=new ConnectionInfo(agentName,data);
+                    activeConnections.addDataPlaneConnection(serviceUUID,serviceConnectionInfo);
+                }
+                default ->
+                    throw new RequestException("Unknown request action!");
+            }
+            response.setStatus(200);
+        }catch(RequestException e){
+            processException(response,e);
+        }
+        responseStream.write(response.toBytes());
+        responseStream.flush();
+    }
+    
     public static void main(String[] args){
         try{
             ServiceManager m=new ServiceManager(9000);

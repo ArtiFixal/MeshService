@@ -54,16 +54,28 @@ public class APIGatewayAgent extends Agent{
         final JsonReader reader=new JsonReader(request);
         System.out.println("ApiGateway Agent: "+reader.getRequestNode().toPrettyString());
         String action=reader.readString("action").toLowerCase();
-        switch (action) {
+        switch(action){
             case "getserviceinfo" -> {
                 String serviceType=reader.readString("service");
                 ServiceHostport managerResponse=askManagerForServiceHostport(serviceType);
-                response.addField("host", managerResponse.getHost())
-                    .addField("port", managerResponse.getPort())
-                    .addArray("requiredFields",managerResponse.getRequestRequiredFields())
-                    .addArray("additionalFields",managerResponse.getAdditionalResponseFields());
+                response.addField("host",managerResponse.getHost())
+                        .addField("port",managerResponse.getPort())
+                        .addArray("requiredFields",managerResponse.getRequestRequiredFields())
+                        .addArray("additionalFields",managerResponse.getAdditionalResponseFields());
             }
-            default -> throw new RequestException("Unknown request action!");
+            case "testserviceconnection" -> {
+                UUID serviceUUID=UUID.fromString(reader.readString("serviceID"));
+                synchronized(runningServices){
+                    testServiceConnection(serviceUUID);
+                }
+            }
+            case "testconnection" -> {}
+            case "reconectservice" -> {
+                UUID serviceUUID=UUID.fromString(reader.readString("serviceID"));
+                reconectService(serviceUUID);
+            }
+            default ->
+                throw new RequestException("Unknown request action!");
         }
         response.setStatus(200);
     }

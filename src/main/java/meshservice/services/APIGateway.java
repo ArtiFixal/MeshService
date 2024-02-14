@@ -1,10 +1,11 @@
 package meshservice.services;
 
 import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.concurrent.atomic.AtomicLong;
+import meshservice.communication.Connection;
+import meshservice.communication.ConnectionThread;
 import meshservice.communication.JsonBuilder;
 import meshservice.communication.JsonReader;
 import meshservice.communication.RequestException;
@@ -14,13 +15,13 @@ import meshservice.communication.RequestException;
  * 
  * @author ArtiFixal
  */
-public class APIGateway extends Service{
+public class APIGateway extends MultithreadService{
     public static final String[] REQUEST_REQUIRED_FIELDS=new String[]{"action"};
     
     /**
      * Socket with established connection to it's Agent.
      */
-    private Socket agentConnection;
+    private ConnectionThread agentConnection;
     
     /**
      * ID of current client message.
@@ -33,6 +34,19 @@ public class APIGateway extends Service{
     
     public APIGateway(int port) throws IOException {
         super(port);
+        registerConnectionAtAgent();
+    }
+    
+    private void registerConnectionAtAgent() throws IOException{
+        agentConnection=new ConnectionThread(new Connection(new Socket("localhost", 10000)),this);
+        agentConnection.start();
+        JsonBuilder request=new JsonBuilder("registerConnection");
+        request.addField("serviceID",getServiceID());
+        try{
+            sendToAgent(request);
+        }catch(Exception e){
+            System.out.println("[API Gateway error]: "+e);
+        }
     }
 
     /**
@@ -47,15 +61,9 @@ public class APIGateway extends Service{
      */
     protected JsonReader sendToAgent(JsonBuilder request) throws IOException, RequestException
     {
-        agentConnection=new Socket("localhost", 10000);
-        try(BufferedInputStream in=new BufferedInputStream(agentConnection.getInputStream());
-                BufferedOutputStream out=new BufferedOutputStream(agentConnection.getOutputStream()))
-        {
-            out.write(request.toBytes());
-            out.flush();
-            System.out.println("Request sent to the ApiGateway agent: "+request.getJson().toPrettyString());
-            return new JsonReader(in); 
-        }
+        System.out.println("Request sent to the ApiGateway agent: "+request.getJson().toPrettyString());
+        
+        return agentConnection.sendRequest(request);
     }
     
     /**
@@ -110,23 +118,23 @@ public class APIGateway extends Service{
         {
             serviceRequest.setNode(field,reader.getNode(field));
         }
-        JsonReader serviceResponse=communicateWithHost(serviceHost, servicePort, serviceRequest);
-        // Forward additional response fields
-        final int serviceResponseStatus=serviceResponse.readNumber("status",Integer.class);
-        if(serviceResponseStatus==200)
-        {
-            for(String field:agentResponse.readArrayOf("additionalFields"))
+        try(Connection serviceConnection=new Connection(new Socket(serviceHost,servicePort))){
+            JsonReader serviceResponse=serviceConnection.sendRequest(serviceRequest);
+            // Forward additional response fields
+            final int serviceResponseStatus=serviceResponse.readNumber("status",Integer.class);
+            if(serviceResponseStatus==200)
             {
-                response.setNode(field,serviceResponse.getNode(field));
+                for(String field:agentResponse.readArrayOf("additionalFields"))
+                    response.setNode(field,serviceResponse.getNode(field));
             }
+            String responseText=serviceResponse.readString("responseText");
+            response.setStatus(responseText,serviceResponseStatus);
         }
-        String responseText=serviceResponse.readString("responseText");
-        response.setStatus(responseText,serviceResponseStatus);
     }
 
     @Override
     public void closeService() throws IOException {
-        if(!agentConnection.isClosed())
+        if(!agentConnection.isAlive())
             agentConnection.close();
         super.closeService();
     }

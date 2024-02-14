@@ -1,16 +1,15 @@
 package meshservice.services;
 
 import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.sql.SQLException;
 import java.util.UUID;
+import meshservice.communication.Connection;
 import meshservice.communication.RequestException;
 import meshservice.communication.JsonBuilder;
-import meshservice.communication.JsonReader;
 
 /**
  * Base class for the single threaded services.
@@ -78,26 +77,30 @@ public abstract class Service extends Thread{
     protected Socket prepareSocket() throws IOException
     {
         final Socket clientSocket=serverSocket.accept();
-        // 3 min timeout
+        // 3 min blocking IO timeout
         clientSocket.setSoTimeout(180000);
         return clientSocket;
     }
-
-    protected void processSocket(Socket clientSocket) throws IOException
-    {
+    
+    public void processConnection(Connection clientConnection) throws IOException{
         final JsonBuilder responseToSend=new JsonBuilder();
-        try(BufferedInputStream request=new BufferedInputStream(clientSocket.getInputStream());
-                BufferedOutputStream response=new BufferedOutputStream(clientSocket.getOutputStream()))
+        try{
+            processRequest(clientConnection.getRequestStream(),responseToSend);
+        }catch(SQLException|RequestException e){
+            System.out.println(e);
+            processException(responseToSend,e);
+            e.printStackTrace();
+        }
+        clientConnection.getResponseStream().write(responseToSend.toBytes());
+        clientConnection.getResponseStream().flush();
+        clientConnection.close();
+    }
+
+    public void processSocket(Socket clientSocket) throws IOException
+    {
+        try(final Connection clientConnection=new Connection(clientSocket))
         {
-            try{
-                processRequest(request,responseToSend);
-            }catch(Exception e){
-                System.out.println(e);
-                processException(responseToSend,e);
-                e.printStackTrace();
-            }
-            response.write(responseToSend.toBytes());
-            response.flush();
+            processConnection(clientConnection);
         }
     }
 
@@ -106,13 +109,13 @@ public abstract class Service extends Thread{
     {
         while(isAlive)
         {
-            try(Socket clientSocket=prepareSocket()){
+            try{
+                Socket clientSocket=prepareSocket();
                 processSocket(clientSocket);
             }catch(IOException e){
                 System.out.println(e);
                 e.printStackTrace();
             }
-            sleepFor(50);
         }
     }
 
@@ -130,21 +133,6 @@ public abstract class Service extends Thread{
             response.setStatus(e.getMessage(),e.getResponseStatus());
         else
             response.setStatus(error.getMessage(),HttpURLConnection.HTTP_INTERNAL_ERROR);
-    }
-
-    protected JsonReader communicateWithHost(String host,int port,JsonBuilder request)
-            throws IOException,RequestException
-    {
-        try(Socket toHost=new Socket(host,port))
-        {
-            try(BufferedInputStream in=new BufferedInputStream(toHost.getInputStream());
-                    BufferedOutputStream out=new BufferedOutputStream(toHost.getOutputStream()))
-            {
-                out.write(request.toBytes());
-                out.flush();
-                return new JsonReader(in);
-            }
-        }
     }
 
     public UUID getServiceID(){
