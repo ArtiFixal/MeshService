@@ -242,10 +242,14 @@ public class JsonReader{
      * @param reader Interface instance.
      * 
      * @return Read array.
+     * 
+     * @throws RequestException If array is null.
      */
-    private <T> ArrayList<T> readArrayFromNode(String fieldName,ArrayNodeReader<T> reader){
+    private <T> ArrayList<T> readArrayFromNode(String fieldName,ArrayNodeReader<T> reader) throws RequestException{
         ArrayList<T> tmp=new ArrayList<>();
         JsonNode arr=requestNode.get(fieldName);
+        if(isNull(arr))
+            throw new RequestException("Array: "+fieldName+" is null");
         try{
             for(int i=0;i<arr.size();i++)
                 tmp.add(reader.read(arr.get(i)));
@@ -260,8 +264,10 @@ public class JsonReader{
      * 
      * @param fieldName Name of field containing array.
      * @return Read array of strings.
+     * 
+     * @throws RequestException If array is null.
      */
-    public ArrayList<String> readArrayOf(String fieldName){
+    public ArrayList<String> readArrayOf(String fieldName) throws RequestException{
         return readArrayFromNode(fieldName,(JsonNode node)->node.asText());
     }
 
@@ -273,8 +279,9 @@ public class JsonReader{
      * @param clazz Class of number to read.
      * 
      * @return Read array of numbers.
+     * @throws RequestException If array is null.
      */
-    public <T> ArrayList<T> readArrayOf(String fieldName,Class<T> clazz)
+    public <T> ArrayList<T> readArrayOf(String fieldName,Class<T> clazz) throws RequestException
     {
         if(clazz.equals(BigDecimal.class)||clazz.equals(BigInteger.class))
             return readArrayFromNode(fieldName,(node)->clazz.getConstructor(String.class).newInstance(node.textValue()));
