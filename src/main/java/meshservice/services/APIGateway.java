@@ -1,7 +1,7 @@
 package meshservice.services;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.Socket;
 import java.util.concurrent.atomic.AtomicLong;
 import meshservice.communication.Connection;
@@ -97,7 +97,7 @@ public class APIGateway extends MultithreadService{
     }
 
     @Override
-    public void processRequest(BufferedInputStream request, JsonBuilder response)
+    public void processRequest(InputStream request, JsonBuilder response)
             throws IOException, RequestException
     {
         final JsonReader reader=new JsonReader(request);

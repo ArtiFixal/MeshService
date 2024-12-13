@@ -1,7 +1,7 @@
 package meshservice.services;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.sql.SQLException;
 import meshservice.User;
 import meshservice.communication.daos.UserDAO;
@@ -36,7 +36,7 @@ public class UserAuthenticationService extends Service{
     }
 
     @Override
-    public void processRequest(BufferedInputStream request,JsonBuilder response) throws IOException,RequestException,SQLException
+    public void processRequest(InputStream request,JsonBuilder response) throws IOException,RequestException,SQLException
     {
         final JsonReader reader=new JsonReader(request);
         final String action=reader.readString("action");

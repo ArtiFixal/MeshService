@@ -1,7 +1,7 @@
 package meshservice.services;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -55,7 +55,7 @@ public abstract class Service extends Thread{
      * @throws RequestException If client request is invalid.
      * @throws SQLException If SQL error occurs.
      */
-    public abstract void processRequest(BufferedInputStream request,JsonBuilder response)
+    public abstract void processRequest(InputStream request,JsonBuilder response)
             throws IOException,RequestException,SQLException;
 
     /**
@@ -86,13 +86,12 @@ public abstract class Service extends Thread{
         final JsonBuilder responseToSend=new JsonBuilder();
         try{
             processRequest(clientConnection.getRequestStream(),responseToSend);
+            clientConnection.respond(responseToSend);
         }catch(SQLException|RequestException e){
             System.out.println(e);
             processException(responseToSend,e);
             e.printStackTrace();
         }
-        clientConnection.getResponseStream().write(responseToSend.toBytes());
-        clientConnection.getResponseStream().flush();
         clientConnection.close();
     }
 

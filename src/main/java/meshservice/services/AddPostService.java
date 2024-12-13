@@ -5,8 +5,8 @@ import meshservice.communication.JsonReader;
 import meshservice.communication.RequestException;
 import meshservice.communication.daos.PostDAO;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.sql.SQLException;
 
 /**
@@ -59,7 +59,7 @@ public class AddPostService extends Service {
      * @throws RequestException if the request cannot be processed.
      */
     @Override
-    public void processRequest(BufferedInputStream request, JsonBuilder response) throws IOException, RequestException {
+    public void processRequest(InputStream request, JsonBuilder response) throws IOException, RequestException {
         final JsonReader reader = new JsonReader(request);
         final String action = reader.readString("action");
         response.addField("action", action);

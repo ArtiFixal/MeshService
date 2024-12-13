@@ -1,7 +1,7 @@
 package meshservice.agents;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.Socket;
 import java.sql.SQLException;
 import java.util.UUID;
@@ -36,7 +36,7 @@ public class ServiceAgent extends Agent{
     }
 
     @Override
-    public void processRequest(BufferedInputStream request,JsonBuilder response) throws IOException,RequestException,SQLException{
+    public void processRequest(InputStream request,JsonBuilder response) throws IOException,RequestException,SQLException{
         final JsonReader reader=new JsonReader(request);
         System.out.println("Service agent request: "+reader.getRequestNode().toPrettyString());
         String action=reader.readString("action").toLowerCase();

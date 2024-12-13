@@ -1,7 +1,7 @@
 package meshservice.agents;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.UUID;
 import meshservice.communication.JsonBuilder;
 import meshservice.communication.JsonReader;
@@ -28,7 +28,11 @@ public class APIGatewayAgent extends Agent{
 
     @Override
     protected Service startService(String serviceName,int port) throws IOException, RequestException {
-        return new APIGateway(port);
+        try{
+            return new APIGateway(port);
+        }catch(Exception e){
+            throw new RuntimeException("Algoritm not found");
+        }
     }
 
     @Override
@@ -48,7 +52,7 @@ public class APIGatewayAgent extends Agent{
     }
     
     @Override
-    public void processRequest(BufferedInputStream request, JsonBuilder response)
+    public void processRequest(InputStream request, JsonBuilder response)
             throws IOException, RequestException
     {
         final JsonReader reader=new JsonReader(request);

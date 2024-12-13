@@ -5,8 +5,8 @@ import meshservice.communication.JsonReader;
 import meshservice.communication.RequestException;
 import meshservice.communication.daos.UserDAO;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.sql.SQLException;
 
 /**
@@ -35,7 +35,7 @@ public class UserRegisterService extends Service{
     }
 
     @Override
-    public void processRequest(BufferedInputStream request,JsonBuilder response) throws IOException,RequestException,SQLException{
+    public void processRequest(InputStream request,JsonBuilder response) throws IOException,RequestException,SQLException{
         final JsonReader reader=new JsonReader(request);
         final String action=reader.readString("action");
         response.addField("action",action);

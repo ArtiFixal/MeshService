@@ -4,9 +4,9 @@ import meshservice.communication.JsonBuilder;
 import meshservice.communication.JsonReader;
 import meshservice.communication.RequestException;
 
-import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
@@ -62,7 +62,7 @@ public class FileDownloadService extends Service {
      * @throws RequestException if the request cannot be processed.
      */
     @Override
-    public void processRequest(BufferedInputStream request, JsonBuilder response) throws IOException, RequestException {
+    public void processRequest(InputStream request, JsonBuilder response) throws IOException, RequestException {
         final JsonReader reader = new JsonReader(request);
         final String action = reader.readString("action");
         final File userDirectory=new File(filesRootDirectory+"/"+reader.readString("ownerID"));
