@@ -25,13 +25,13 @@ public class UserDAO extends DAOObject{
      * Inserts new user to the DB.
      * 
      * @param login New user login.
-     * @param password User password.
+     * @param publicKey User public key.
      * 
      * @return ID of inserted user or -1 if already exists.
      * 
      * @throws SQLException Any error occurred during the DML query.
      */
-    public long insertUser(String login,String password) throws SQLException
+    public long insertUser(String login,byte[] publicKey) throws SQLException
     {
         PreparedStatement existanceCheck=con.prepareStatement("SELECT id FROM users WHERE username=?");
         existanceCheck.setString(1,login);
@@ -40,8 +40,7 @@ public class UserDAO extends DAOObject{
             try(PreparedStatement insertStatement=con.prepareStatement("INSERT INTO users VALUES(NULL,?,?)"))
             {
                 insertStatement.setString(1,login);
-                String hash=hashPassword(password);
-                insertStatement.setString(2,hash);
+                insertStatement.setBytes(2,publicKey);
                 insertStatement.execute();
                 return getLastInsertedId();
             }
@@ -50,57 +49,51 @@ public class UserDAO extends DAOObject{
     }
 
     /**
-     * Authenticates given user if password matches.
+     * Looks for user with given login in DB.
      * 
      * @param login User login.
-     * @param password User password.
      * 
-     * @return Logged-in user data.
+     * @return Found user, null otherwise.
      * 
      * @throws SQLException Any error occurred during the DML query.
      */
-    public User loginAs(String login,String password) throws SQLException
+    public User findUserByLogin(String login) throws SQLException
     {
-        PreparedStatement selectUser=con.prepareStatement("SELECT id,password FROM users WHERE username=?");
+        PreparedStatement selectUser=con.prepareStatement("SELECT id,publicKey FROM users WHERE username=?");
         selectUser.setString(1,login);
         ResultSet user=selectUser.executeQuery();
         if(user.next())
         {
-            String passwordHash=user.getString(2);
-            if(passwordHash.equals(hashPassword(password)))
-                return new User(user.getLong(1),login);
+            byte[] key=user.getBytes(2);
+            return new User(user.getLong(1),login,key);
         }
         return null;
     }
 
     /**
-     * Changes given user password.
+     * Changes given user public key.
      * 
      * @param userID Whom to change password.
-     * @param oldPassword From what to change.
-     * @param newPassword To what to change.
+     * @param oldKey Current user key.
+     * @param newKey To what to change.
      * 
      * @return True on success, false otherwise.
      * 
      * @throws SQLException Any error occurred during the DML query.
      */
-    public boolean changePassword(long userID,String oldPassword,String newPassword) throws SQLException
+    public boolean changeKey(long userID,byte[] oldKey,byte[] newKey) throws SQLException
     {
-        ResultSet user=getElementByID("password","users",userID);
+        ResultSet user=getElementByID("publicKey","users",userID);
         if(user.next())
         {
-            String passwordHash=user.getString(1);
-            if(passwordHash.equals(hashPassword(oldPassword)))
+            byte[] currentKey=user.getBytes(1);
+            if(currentKey==oldKey)
             {
-                PreparedStatement updatePassword=con.prepareCall(createUpdateQuery("users","id="+userID,"password"));
-                updatePassword.setString(1,newPassword);
+                PreparedStatement updatePassword=con.prepareCall(createUpdateQuery("users","id="+userID,"publicKey"));
+                updatePassword.setBytes(1,newKey);
                 return updatePassword.executeUpdate()==1;
             }
         }
         return false;
-    }
-
-    private String hashPassword(String password){
-        return password;
     }
 }

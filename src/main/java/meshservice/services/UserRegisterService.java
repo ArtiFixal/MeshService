@@ -39,11 +39,11 @@ public class UserRegisterService extends Service{
         final JsonReader reader=new JsonReader(request);
         final String action=reader.readString("action");
         response.addField("action",action);
-        String login=reader.readString("login"),
-                password=reader.readString("password");
+        String username=reader.readString("username");
+        byte[] publicKey=reader.readObject("publicKey",byte[].class);
         if(action.equals("register"))
         {
-            if(dao.insertUser(login,password)==-1)
+            if(dao.insertUser(username,publicKey)==-1)
                 throw new RequestException("User already exists");
             response.setStatus("User registered successfuly",200);
         }

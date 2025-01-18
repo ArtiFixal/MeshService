@@ -41,16 +41,14 @@ public class UserAuthenticationService extends Service{
         final JsonReader reader=new JsonReader(request);
         final String action=reader.readString("action");
         response.addField("action",action);
-        String login=reader.readString("login"),
-                password=reader.readString("password");
+        String username=reader.readString("username");
         if(action.equals("login"))
         {
-            User loggedIn=dao.loginAs(login,password);
+            User loggedIn=dao.findUserByLogin(username);
             if(loggedIn!=null)
             {
-                int apiKey=loggedIn.hashCode();
                 response.addField("userID",loggedIn.getId())
-                    .addField("apiKey",apiKey)
+                    .addField("publicKey",loggedIn.getPublicKey())
                     .setStatus("User logged in successfully",200);
             }
             else
